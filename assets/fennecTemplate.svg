@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <!-- Stylized fennec fox head - big ears, small face -->
+  <!-- Left ear -->
+  <path d="M7 3 L4 14 L12 14 Z" fill="black"/>
+  <!-- Right ear -->
+  <path d="M25 3 L20 14 L28 14 Z" fill="black"/>
+  <!-- Head -->
+  <ellipse cx="16" cy="19" rx="9" ry="8" fill="black"/>
+  <!-- Left eye -->
+  <ellipse cx="12.5" cy="17.5" rx="2" ry="2" fill="white"/>
+  <!-- Right eye -->
+  <ellipse cx="19.5" cy="17.5" rx="2" ry="2" fill="white"/>
+  <!-- Nose -->
+  <ellipse cx="16" cy="21.5" rx="1.5" ry="1" fill="white"/>
+  <!-- Inner left ear -->
+  <path d="M7.5 6 L6 13 L11 13 Z" fill="white" opacity="0.3"/>
+  <!-- Inner right ear -->
+  <path d="M24.5 6 L21 13 L27 13 Z" fill="white" opacity="0.3"/>
+</svg>

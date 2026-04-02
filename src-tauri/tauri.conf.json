@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Fennec",
+  "version": "0.1.0-alpha",
+  "identifier": "ai.fennec.app",
+  "build": {
+    "beforeDevCommand": "bun run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "bun run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [],
+    "security": {
+      "csp": null
+    },
+    "trayIcon": {
+      "id": "fennec-tray",
+      "iconPath": "icons/tray_color.png",
+      "iconAsTemplate": false,
+      "tooltip": "Fennec"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["dmg", "app"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns"
+    ],
+    "macOS": {
+      "minimumSystemVersion": "10.15"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDhCNDFDODU4MjhGMUQ0MEUKUldRTzFQRW9XTWhCaXlkVklpbEdhVzlsaWIvdmxpaEtTMncyY24zS2E0RFlUWGhzR083bXIvR0YK",
+      "endpoints": [
+        "https://github.com/andreamazzatxt/fennec/releases/latest/download/latest.json"
+      ]
+    }
+  }
+}
