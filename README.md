@@ -26,16 +26,17 @@ No windows to manage. No copy-pasting into a chat. Just better text, right where
 
 ## Features
 
-- **Instant correction** — Select text → press shortcut → corrected text replaces the selection
-- **Multiple actions** — Correct, make formal, make casual, make concise
-- **Custom actions** — Create your own (e.g. "Translate to English", "Summarize")
-- **Works everywhere** — Slack, Mail, Notes, VS Code, browsers, any app
+- **Instant correction** — Select text, press shortcut, corrected text replaces the selection
+- **Action menu** — Native macOS popup with actions: Smooth, Formal, Casual, Concise
+- **Works everywhere** — Slack, WhatsApp Web, Mail, Notes, VS Code, browsers, any app
 - **Select all + correct** — Fix an entire text field with one shortcut
 - **Undo** — Restore the original text if you don't like the result
 - **Auto-detect language** — Works in any language, responds in the same language
+- **Accessibility API** — Uses AX APIs for direct text read/write, clipboard fallback for web apps
 - **Sound feedback** — A subtle sound when the AI finishes
 - **Auto-update** — Stays up to date automatically
-- **Launch at login** — Optional, toggle from the tray menu
+- **Launch at login** — Toggle from the tray menu
+- **Menu bar only** — No dock icon, runs purely from the menu bar
 - **Tiny footprint** — ~8MB app size, powered by Tauri v2
 
 ## Install
@@ -59,15 +60,17 @@ The `.dmg` will be in `src-tauri/target/release/bundle/dmg/`.
 
 - [Bun](https://bun.sh/) — JavaScript runtime
 - [Rust](https://rustup.rs/) — for the Tauri backend
+- Node.js 24+ (via [nvm](https://github.com/nvm-sh/nvm))
 
 ## Setup
 
-On first launch, Fennec opens Settings automatically. You need to configure your AI provider:
+On first launch, configure your AI provider:
 
-1. Go to the **AI Providers** tab
-2. Open **Radicalbit AI Gateway**
-3. Enter your **API Key**, **Endpoint**, and **Model**
-4. Click **Save**
+1. Click the Fennec icon in the menu bar and select **Settings...**
+2. Go to the **Connection** tab
+3. Open the **AI Gateway** accordion (Radical Bit)
+4. Enter your **API Key**, **Endpoint**, and **Model**
+5. Click **Save**
 
 Config is stored locally in `~/.fennec.json`. Your API key never leaves your machine except to call the AI endpoint.
 
@@ -76,21 +79,30 @@ Config is stored locally in `~/.fennec.json`. Your API key never leaves your mac
 | Action | Default | Description |
 |--------|---------|-------------|
 | Smooth it out | `⌘⇧.` | Correct selected text |
-| Smooth all text | `⌘⇧;` | Select all + correct |
-| More options | `⌘⇧L` | Open action menu for selection |
-| More options for all | `⌘⇧'` | Select all + open action menu |
-| Undo last | `⌘⇧Z` | Restore original text |
+| Smooth everything | `⌘⇧,` | Select all + correct |
+| Pick an action | `⌘⇧L` | Open native action menu for selection |
+| Action on everything | `⌘⇧'` | Select all + open action menu |
+| Step back | `⌘⇧Z` | Restore original text |
 
-All shortcuts are customizable in **Settings → Shortcuts**.
+All shortcuts are customizable in **Settings > Shortcuts** — click any shortcut to record a new key combination.
 
-## Custom Actions
+### Action menu
 
-Create your own text transformations in **Settings → Custom Actions**:
+The action menu is a native macOS popup that appears at your cursor with:
 
-1. Click **+ Add action**
-2. Give it a name and description
-3. Write a prompt (e.g. *"Translate the following text to English"*)
-4. Save — it appears in the options menu
+- **Smooth it out** — Fix grammar, spelling, and flow
+- **More formal** — Rewrite in a professional tone
+- **More casual** — Rewrite in a friendly tone
+- **Make it shorter** — Condense while keeping the meaning
+
+## Tray menu
+
+Right-click (or click) the Fennec icon in the menu bar:
+
+- **Fennec v0.3.0** — Version display
+- **Settings...** — Open the settings window
+- **Launch at login** — Toggle autostart
+- **Quit Fennec** — Exit the app
 
 ## Development
 
@@ -103,19 +115,19 @@ bun run tauri build  # build .dmg
 ## Tech
 
 - [Tauri v2](https://tauri.app/) — native macOS app (~8MB vs ~700MB with Electron)
-- [Rust](https://www.rust-lang.org/) — backend (AI client, clipboard, config)
-- [TypeScript](https://www.typescriptlang.org/) — frontend (shortcuts, notifications)
-- [Vite](https://vite.dev/) — build tooling
+- [Rust](https://www.rust-lang.org/) — backend (AI client, AX text access, config)
+- [TypeScript](https://www.typescriptlang.org/) — frontend (settings UI)
+- [Vite 8](https://vite.dev/) — build tooling
+- [objc2](https://github.com/madsmtm/objc2) — native NSMenu, NSApplication bindings
 
 ## How it works
 
 1. You press a shortcut
-2. Fennec simulates `⌘C` to copy your selected text
+2. Fennec reads the selected text via macOS Accessibility APIs (AXSelectedText)
 3. Sends it to the AI gateway for processing
-4. Simulates `⌘V` to paste the improved text back
-5. Restores your original clipboard
+4. Writes the improved text back via AX APIs (or clipboard + paste as fallback for web apps)
 
-The app requires Accessibility permissions to simulate keyboard shortcuts in other apps.
+The app requires Accessibility permissions to read and write text in other apps.
 
 ---
 
