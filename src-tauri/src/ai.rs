@@ -33,8 +33,21 @@ struct ChatResponse {
 pub async fn call_ai(config: &FennecConfig, prompt: &str) -> Result<String, String> {
     let client = reqwest::Client::new();
 
+    let (endpoint, api_key, model) = match config.provider.as_str() {
+        "openai" => (
+            "https://api.openai.com/v1/chat/completions".to_string(),
+            config.openai_api_key.clone(),
+            config.openai_model.clone(),
+        ),
+        _ => (
+            config.endpoint.clone(),
+            config.api_key.clone(),
+            config.model.clone(),
+        ),
+    };
+
     let request = ChatRequest {
-        model: config.model.clone(),
+        model,
         messages: vec![ChatMessage {
             role: "user".into(),
             content: prompt.into(),
@@ -43,9 +56,9 @@ pub async fn call_ai(config: &FennecConfig, prompt: &str) -> Result<String, Stri
     };
 
     let response = client
-        .post(&config.endpoint)
+        .post(&endpoint)
         .header("Content-Type", "application/json")
-        .header("Authorization", format!("Bearer {}", config.api_key))
+        .header("Authorization", format!("Bearer {}", api_key))
         .json(&request)
         .send()
         .await

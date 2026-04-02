@@ -1,6 +1,6 @@
 [package]
 name = "fennec"
-version = "0.2.0"
+version = "0.3.0"
 description = "AI-powered text correction for macOS"
 authors = ["andreamazzatxt"]
 edition = "2021"
@@ -28,3 +28,6 @@ accessibility-sys = "0.2"
 tauri-nspanel = { git = "https://github.com/ahkohd/tauri-nspanel", branch = "v2" }
 core-foundation = "0.10"
 macos-accessibility-client = "0.0.2"
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", features = ["NSApplication", "NSRunningApplication", "NSMenu", "NSMenuItem", "NSEvent", "NSPopover"] }
+objc2-foundation = "0.3"

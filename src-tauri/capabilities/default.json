@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Capability for Fennec",
-  "windows": ["main"],
+  "windows": ["main", "settings", "action-menu"],
   "permissions": [
     "core:default",
     "global-shortcut:default",

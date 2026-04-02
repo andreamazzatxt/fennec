@@ -134,8 +134,13 @@ pub fn write_text(new_text: &str, was_selected: bool) -> Result<(), String> {
     // Fallback: clipboard + paste
     println!("[fennec] Falling back to clipboard");
     if !was_selected {
-        crate::clipboard::simulate_select_all().ok();
-        std::thread::sleep(std::time::Duration::from_millis(100));
+        // Use Cmd+A for select all — works better in web apps (WhatsApp, etc.)
+        std::process::Command::new("osascript")
+            .arg("-e")
+            .arg(r#"tell application "System Events" to keystroke "a" using command down"#)
+            .output()
+            .ok();
+        std::thread::sleep(std::time::Duration::from_millis(150));
     }
     clipboard_fallback_write(new_text)
 }

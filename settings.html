@@ -1,0 +1,639 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fennec Settings</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fira+Code:wght@400&display=swap" rel="stylesheet">
+    <script type="module" src="/src/settings.ts" defer></script>
+    <style>
+      :root {
+        --bg: #eae3d7;
+        --surface: #eae3d7;
+        --surface-border: rgba(0, 0, 0, 0.07);
+        --text: #1c1c1e;
+        --text-secondary: #6e6e73;
+        --text-dim: #aeaeb2;
+        --sage: #7a9b6d;
+        --sage-dark: #638558;
+        --sage-bg: rgba(122, 155, 109, 0.08);
+        --sage-border: rgba(122, 155, 109, 0.2);
+        --input-border: rgba(0, 0, 0, 0.10);
+        --input-focus: rgba(122, 155, 109, 0.35);
+        --hover: rgba(0, 0, 0, 0.03);
+        --divider: rgba(0, 0, 0, 0.06);
+        --recording-bg: rgba(122, 155, 109, 0.06);
+        --recording-color: var(--text-dim);
+      }
+
+
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+
+      body {
+        font-family: "Inter", -apple-system, system-ui, sans-serif;
+        font-size: 13px;
+        color: var(--text);
+        background: var(--bg);
+        -webkit-user-select: none;
+        user-select: none;
+        overflow: hidden;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        position: relative;
+      }
+
+      .watermark {
+        position: fixed;
+        bottom: 14px;
+        left: 18px;
+        width: 86px;
+        height: 86px;
+        opacity: 0.25;
+        pointer-events: none;
+        z-index: 0;
+      }
+
+      /* ── Drag region ── */
+      .drag-region {
+        height: 4px;
+        flex-shrink: 0;
+      }
+
+      /* ── Tabs ── */
+      .tabs {
+        display: flex;
+        gap: 0;
+        padding: 0 24px;
+        border-bottom: 1px solid var(--divider);
+        flex-shrink: 0;
+      }
+
+      .tab {
+        padding: 10px 16px 11px;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-secondary);
+        cursor: pointer;
+        border: none;
+        background: none;
+        position: relative;
+        transition: color 0.15s;
+        font-family: inherit;
+        outline: none;
+      }
+
+      .tab:hover {
+        color: var(--text);
+      }
+
+      .tab.active {
+        color: var(--sage);
+      }
+
+      .tab.active::after {
+        content: "";
+        position: absolute;
+        bottom: -1px;
+        left: 12px;
+        right: 12px;
+        height: 2px;
+        background: var(--sage);
+        border-radius: 1px;
+      }
+
+      /* ── Panel area ── */
+      .panels {
+        flex: 1;
+        overflow-y: auto;
+        padding: 20px 24px;
+      }
+
+      .panel {
+        display: none;
+        animation: fadeIn 0.2s ease;
+      }
+
+      .panel.active {
+        display: block;
+      }
+
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(4px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+
+      /* ── Entry animations ── */
+      @keyframes slideUp {
+        from { opacity: 0; transform: translateY(12px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+
+      .tabs {
+        animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) 0.02s both;
+      }
+
+      .accordion {
+        animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.08s both;
+      }
+
+      .accordion-content .field-group:nth-child(1) {
+        animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) 0.14s both;
+      }
+      .accordion-content .field-group:nth-child(2) {
+        animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) 0.18s both;
+      }
+      .accordion-content .field-group:nth-child(3) {
+        animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) 0.22s both;
+      }
+
+      .shortcut-list {
+        animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.08s both;
+      }
+
+      .shortcut-row:nth-child(1) { animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) 0.10s both; }
+      .shortcut-row:nth-child(2) { animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) 0.14s both; }
+      .shortcut-row:nth-child(3) { animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) 0.18s both; }
+      .shortcut-row:nth-child(4) { animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) 0.22s both; }
+      .shortcut-row:nth-child(5) { animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) 0.26s both; }
+
+      .footer {
+        animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.20s both;
+      }
+
+      /* ── Accordion ── */
+      .accordion {
+        border: 1px solid var(--surface-border);
+        border-radius: 10px;
+        background: var(--surface);
+        overflow: hidden;
+      }
+
+      .accordion-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
+        cursor: pointer;
+        transition: background 0.1s;
+        border: none;
+        background: none;
+        width: 100%;
+        text-align: left;
+        font-family: inherit;
+        color: var(--text);
+        outline: none;
+      }
+
+      .accordion-header:hover {
+        background: var(--hover);
+      }
+
+      .accordion-chevron {
+        width: 16px;
+        height: 16px;
+        color: var(--text-dim);
+        transition: transform 0.2s ease;
+        flex-shrink: 0;
+      }
+
+      .accordion.open .accordion-chevron {
+        transform: rotate(90deg);
+      }
+
+      .accordion-title {
+        font-size: 13px;
+        font-weight: 500;
+        flex: 1;
+      }
+
+      .accordion-badge {
+        font-size: 10px;
+        font-weight: 500;
+        color: var(--sage);
+        background: var(--sage-bg);
+        padding: 2px 8px;
+        border-radius: 4px;
+        letter-spacing: 0.3px;
+        text-transform: uppercase;
+      }
+
+      .accordion-body {
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.25s ease;
+      }
+
+      .accordion.open .accordion-body {
+        max-height: 300px;
+      }
+
+      .accordion-content {
+        padding: 4px 14px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      /* ── Provider list ── */
+      .provider-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .provider-radio {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        border: 2px solid var(--text-dim);
+        flex-shrink: 0;
+        transition: border-color 0.15s, box-shadow 0.15s;
+        position: relative;
+      }
+
+      .provider-radio::after {
+        content: "";
+        position: absolute;
+        inset: 2px;
+        border-radius: 50%;
+        background: var(--sage);
+        transform: scale(0);
+        transition: transform 0.15s;
+      }
+
+      .accordion.selected .provider-radio {
+        border-color: var(--sage);
+      }
+
+      .accordion.selected .provider-radio::after {
+        transform: scale(1);
+      }
+
+      /* ── Field groups ── */
+      .field-group {
+        position: relative;
+      }
+
+      .field-group label {
+        display: block;
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--text-secondary);
+        margin-bottom: 4px;
+      }
+
+      .field-group input[type="text"],
+      .field-group input[type="password"] {
+        width: 100%;
+        height: 36px;
+        padding: 0 10px;
+        border: 1px solid var(--input-border);
+        border-radius: 8px;
+        background: var(--bg);
+        font-family: "Fira Code", monospace;
+        font-size: 12px;
+        color: var(--text);
+        outline: none;
+        transition: border-color 0.15s, box-shadow 0.15s;
+        -webkit-user-select: text;
+        user-select: text;
+      }
+
+      .field-group input::placeholder {
+        font-family: "Inter", sans-serif;
+        color: var(--text-dim);
+        font-size: 12px;
+      }
+
+      .field-group input:focus {
+        border-color: var(--input-focus);
+        box-shadow: 0 0 0 3px var(--sage-bg);
+      }
+
+      /* API key eye toggle */
+      .input-wrap {
+        position: relative;
+      }
+
+      .input-wrap input {
+        padding-right: 36px;
+      }
+
+      .eye-toggle {
+        position: absolute;
+        right: 3px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 28px;
+        height: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        color: var(--text-dim);
+        border: none;
+        background: none;
+        border-radius: 6px;
+        transition: color 0.12s, background 0.12s;
+      }
+
+      .eye-toggle:hover {
+        color: var(--text-secondary);
+        background: var(--hover);
+      }
+
+      /* ── Shortcut list ── */
+      .shortcut-list {
+        display: flex;
+        flex-direction: column;
+        border: 1px solid var(--surface-border);
+        border-radius: 10px;
+        background: var(--surface);
+        overflow: hidden;
+      }
+
+      .shortcut-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 14px;
+        height: 44px;
+        cursor: pointer;
+        transition: background 0.1s;
+      }
+
+      .shortcut-row:hover {
+        background: var(--hover);
+      }
+
+      .shortcut-row + .shortcut-row {
+        border-top: 1px solid var(--divider);
+      }
+
+      .shortcut-name {
+        font-size: 13px;
+        font-weight: 400;
+        color: var(--text);
+      }
+
+      .shortcut-keys {
+        display: flex;
+        align-items: center;
+        gap: 3px;
+      }
+
+      .key {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 22px;
+        height: 22px;
+        padding: 0 5px;
+        background: var(--bg);
+        border: 1px solid var(--surface-border);
+        border-radius: 5px;
+        font-family: -apple-system, system-ui, sans-serif;
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--text-secondary);
+        box-shadow: 0 1px 0 var(--surface-border);
+        line-height: 1;
+      }
+
+      .key.key-wide {
+        padding: 0 7px;
+        font-size: 11px;
+      }
+
+      /* Recording state */
+      .shortcut-row.recording {
+        background: var(--recording-bg);
+      }
+
+      .shortcut-row.recording .shortcut-keys {
+        display: none;
+      }
+
+      .shortcut-row .recording-label {
+        display: none;
+        font-size: 12px;
+        color: var(--recording-color);
+        font-weight: 500;
+        animation: blink 1s ease-in-out infinite;
+      }
+
+      .shortcut-row.recording .recording-label {
+        display: block;
+      }
+
+      @keyframes blink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.4; }
+      }
+
+      /* ── Footer ── */
+      .footer {
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 10px;
+        padding: 14px 24px;
+      }
+
+      .saved-badge {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        margin-right: auto;
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--sage);
+        opacity: 0;
+        transform: translateY(2px);
+        transition: opacity 0.25s ease, transform 0.25s ease;
+        pointer-events: none;
+      }
+
+      .saved-badge.visible {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      .saved-badge svg {
+        width: 14px;
+        height: 14px;
+      }
+
+      .btn-save {
+        padding: 7px 24px;
+        border-radius: 8px;
+        border: none;
+        font-family: "Inter", sans-serif;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        background: var(--sage);
+        color: #fff;
+        transition: all 0.12s ease;
+        outline: none;
+        box-shadow: 0 1px 3px rgba(122, 155, 109, 0.25);
+      }
+
+      .btn-save:hover {
+        background: var(--sage-dark);
+        box-shadow: 0 2px 8px rgba(122, 155, 109, 0.3);
+        transform: translateY(-0.5px);
+      }
+
+      .btn-save:active {
+        transform: translateY(0.5px);
+        box-shadow: 0 1px 2px rgba(122, 155, 109, 0.15);
+      }
+
+      .btn-save:focus-visible {
+        box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--sage);
+      }
+
+      /* ── Scrollbar ── */
+      ::-webkit-scrollbar { width: 5px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: var(--text-dim); border-radius: 3px; }
+    </style>
+  </head>
+  <body>
+    <img class="watermark" src="/fennec-logo.png" alt="" />
+    <div class="drag-region"></div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab active" data-tab="shortcuts">Shortcuts</button>
+      <button class="tab" data-tab="connection">Connection</button>
+    </div>
+
+    <!-- Panels -->
+    <div class="panels">
+
+      <!-- Shortcuts panel -->
+      <div class="panel active" id="panel-shortcuts">
+        <div class="shortcut-list">
+          <div class="shortcut-row" data-shortcut="correct">
+            <span class="shortcut-name">Smooth it out</span>
+            <div class="shortcut-keys" id="correctKeys"></div>
+            <span class="recording-label">Press new shortcut...</span>
+          </div>
+          <div class="shortcut-row" data-shortcut="correctAll">
+            <span class="shortcut-name">Smooth everything</span>
+            <div class="shortcut-keys" id="correctAllKeys"></div>
+            <span class="recording-label">Press new shortcut...</span>
+          </div>
+          <div class="shortcut-row" data-shortcut="menu">
+            <span class="shortcut-name">Pick an action</span>
+            <div class="shortcut-keys" id="menuKeys"></div>
+            <span class="recording-label">Press new shortcut...</span>
+          </div>
+          <div class="shortcut-row" data-shortcut="menuAll">
+            <span class="shortcut-name">Action on everything</span>
+            <div class="shortcut-keys" id="menuAllKeys"></div>
+            <span class="recording-label">Press new shortcut...</span>
+          </div>
+          <div class="shortcut-row" data-shortcut="undo">
+            <span class="shortcut-name">Step back</span>
+            <div class="shortcut-keys" id="undoKeys"></div>
+            <span class="recording-label">Press new shortcut...</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Connection panel -->
+      <div class="panel" id="panel-connection">
+        <div class="provider-list">
+
+          <!-- Radical Bit -->
+          <div class="accordion selected" id="accordion-radicalbit" data-provider="radicalbit">
+            <button class="accordion-header" aria-expanded="false">
+              <div class="provider-radio"></div>
+              <span class="accordion-title">AI Gateway</span>
+              <span class="accordion-badge">Radical Bit</span>
+              <svg class="accordion-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M6 4l4 4-4 4"/>
+              </svg>
+            </button>
+            <div class="accordion-body">
+              <div class="accordion-content">
+                <div class="field-group">
+                  <label for="rbApiKey">API Key</label>
+                  <div class="input-wrap">
+                    <input type="password" id="rbApiKey" placeholder="Paste your key" />
+                    <button class="eye-toggle" data-toggle="rbApiKey" title="Show key" aria-label="Toggle visibility">
+                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M1.5 8s2.5-5 6.5-5 6.5 5 6.5 5-2.5 5-6.5 5-6.5-5-6.5-5z"/>
+                        <circle cx="8" cy="8" r="2"/>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <div class="field-group">
+                  <label for="rbEndpoint">Endpoint</label>
+                  <input type="text" id="rbEndpoint" placeholder="https://..." />
+                </div>
+                <div class="field-group">
+                  <label for="rbModel">Model</label>
+                  <input type="text" id="rbModel" placeholder="Model name" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- OpenAI -->
+          <div class="accordion" id="accordion-openai" data-provider="openai">
+            <button class="accordion-header" aria-expanded="false">
+              <div class="provider-radio"></div>
+              <span class="accordion-title">OpenAI</span>
+              <span class="accordion-badge">OpenAI</span>
+              <svg class="accordion-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M6 4l4 4-4 4"/>
+              </svg>
+            </button>
+            <div class="accordion-body">
+              <div class="accordion-content">
+                <div class="field-group">
+                  <label for="oaiApiKey">API Key</label>
+                  <div class="input-wrap">
+                    <input type="password" id="oaiApiKey" placeholder="sk-..." />
+                    <button class="eye-toggle" data-toggle="oaiApiKey" title="Show key" aria-label="Toggle visibility">
+                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M1.5 8s2.5-5 6.5-5 6.5 5 6.5 5-2.5 5-6.5 5-6.5-5-6.5-5z"/>
+                        <circle cx="8" cy="8" r="2"/>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <div class="field-group">
+                  <label for="oaiModel">Model</label>
+                  <input type="text" id="oaiModel" placeholder="e.g. gpt-4o" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <div class="saved-badge" id="status">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="3.5 8.5 6.5 11.5 12.5 4.5"/>
+        </svg>
+        Saved
+      </div>
+      <button class="btn-save" id="saveBtn">Save</button>
+    </div>
+  </body>
+</html>

@@ -24,10 +24,16 @@ pub struct CustomAction {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FennecConfig {
+    #[serde(default = "default_provider")]
+    pub provider: String,
     #[serde(rename = "apiKey")]
     pub api_key: String,
     pub endpoint: String,
     pub model: String,
+    #[serde(rename = "openaiApiKey", default)]
+    pub openai_api_key: String,
+    #[serde(rename = "openaiModel", default)]
+    pub openai_model: String,
     pub shortcuts: ShortcutConfig,
     #[serde(rename = "launchAtLogin", default)]
     pub launch_at_login: bool,
@@ -47,12 +53,19 @@ impl Default for ShortcutConfig {
     }
 }
 
+fn default_provider() -> String {
+    "radicalbit".into()
+}
+
 impl Default for FennecConfig {
     fn default() -> Self {
         Self {
+            provider: "radicalbit".into(),
             api_key: String::new(),
             endpoint: "https://ai-gateway.radicalbit.ai/v1/chat/completions".into(),
             model: String::new(),
+            openai_api_key: String::new(),
+            openai_model: String::new(),
             shortcuts: ShortcutConfig::default(),
             launch_at_login: false,
             custom_actions: vec![],

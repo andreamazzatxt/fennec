@@ -5,12 +5,13 @@ mod config;
 
 use config::{FennecConfig, load_config, save_config};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 use tauri::image::Image;
 use tauri::{
     AppHandle, Manager, WebviewUrl, WebviewWindowBuilder,
     menu::{MenuBuilder, MenuItemBuilder},
 };
+use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 struct AppState {
@@ -25,10 +26,22 @@ fn get_config(state: tauri::State<AppState>) -> FennecConfig {
 }
 
 #[tauri::command]
-fn update_config(state: tauri::State<AppState>, new_config: FennecConfig) -> Result<(), String> {
+fn update_config(app: AppHandle, state: tauri::State<AppState>, new_config: FennecConfig) -> Result<(), String> {
     save_config(&new_config)?;
     *state.config.lock().unwrap() = new_config;
+    unregister_shortcuts(&app);
+    register_shortcuts(&app);
     Ok(())
+}
+
+#[tauri::command]
+fn pause_shortcuts(app: AppHandle) {
+    unregister_shortcuts(&app);
+}
+
+#[tauri::command]
+fn resume_shortcuts(app: AppHandle) {
+    register_shortcuts(&app);
 }
 
 #[tauri::command]
@@ -44,7 +57,11 @@ async fn execute_action_internal(
 ) -> Result<(), String> {
     let config = state.config.lock().unwrap().clone();
 
-    if config.api_key.is_empty() {
+    let active_key = match config.provider.as_str() {
+        "openai" => &config.openai_api_key,
+        _ => &config.api_key,
+    };
+    if active_key.is_empty() {
         return Err("API key not configured".into());
     }
 
@@ -100,6 +117,26 @@ async fn execute_action(
     action_id: String,
     select_all: bool,
 ) -> Result<(), String> {
+    execute_action_internal(&app, &state, action_id, select_all).await
+}
+
+/// Called from the action menu popup. Closes the popup, waits for focus to return,
+/// then executes the action on the previously focused text field.
+#[tauri::command]
+async fn execute_action_deferred(
+    app: AppHandle,
+    action_id: String,
+    select_all: bool,
+) -> Result<(), String> {
+    // Close the popup window
+    if let Some(win) = app.get_webview_window("action-menu") {
+        let _ = win.close();
+    }
+
+    // Wait for focus to return to the original app
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+
+    let state = app.state::<AppState>();
     execute_action_internal(&app, &state, action_id, select_all).await
 }
 
@@ -190,6 +227,68 @@ fn build_prompt(config: &FennecConfig, action_id: &str, text: &str) -> String {
     )
 }
 
+fn show_action_menu(app: &AppHandle, select_all: bool) {
+    let app_clone = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        use objc2::MainThreadMarker;
+        use objc2_app_kit::{NSMenu, NSMenuItem, NSEvent};
+        use objc2_foundation::NSString;
+
+        let mtm = unsafe { MainThreadMarker::new_unchecked() };
+
+        let menu = NSMenu::new(mtm);
+        menu.setAutoenablesItems(false);
+
+        let titles = ["Smooth it out", "More formal", "More casual", "Make it shorter"];
+
+        for title in &titles {
+            let item = unsafe {
+                NSMenuItem::initWithTitle_action_keyEquivalent(
+                    mtm.alloc(),
+                    &NSString::from_str(title),
+                    None,
+                    &NSString::from_str(""),
+                )
+            };
+            item.setEnabled(true);
+            menu.addItem(&item);
+        }
+
+        // Show menu at mouse location — blocks until user picks or dismisses
+        let mouse_loc = NSEvent::mouseLocation();
+        let picked = menu.popUpMenuPositioningItem_atLocation_inView(
+            None,
+            mouse_loc,
+            None,
+        );
+
+        if picked {
+            if let Some(selected) = menu.highlightedItem() {
+                let title = selected.title().to_string();
+                let action_id = match title.as_str() {
+                    "Smooth it out" => "correct",
+                    "More formal" => "formal",
+                    "More casual" => "informal",
+                    "Make it shorter" => "concise",
+                    _ => return,
+                };
+
+                let app_h = app_clone.clone();
+                let action = action_id.to_string();
+                tauri::async_runtime::spawn(async move {
+                    let state = app_h.state::<AppState>();
+                    let _ = execute_action_internal(&app_h, &state, action, select_all).await;
+                });
+            }
+        }
+    });
+}
+
+fn unregister_shortcuts(app: &AppHandle) {
+    let _ = app.global_shortcut().unregister_all();
+    println!("[fennec] Unregistered all shortcuts");
+}
+
 fn register_shortcuts(app: &AppHandle) {
     let config = app.state::<AppState>().config.lock().unwrap().clone();
     let s = &config.shortcuts;
@@ -244,6 +343,30 @@ fn register_shortcuts(app: &AppHandle) {
     } else {
         println!("[fennec] Registered: {}", shortcut);
     }
+
+    // Action menu (on selection)
+    let app_handle = app.clone();
+    let shortcut = s.menu.clone();
+    if let Err(e) = app.global_shortcut().on_shortcut(shortcut.as_str(), move |_app, _shortcut, event| {
+        if event.state != ShortcutState::Pressed { return; }
+        show_action_menu(&app_handle, false);
+    }) {
+        eprintln!("[fennec] Failed to register {}: {}", shortcut, e);
+    } else {
+        println!("[fennec] Registered: {}", shortcut);
+    }
+
+    // Action menu (select all)
+    let app_handle = app.clone();
+    let shortcut = s.menu_all.clone();
+    if let Err(e) = app.global_shortcut().on_shortcut(shortcut.as_str(), move |_app, _shortcut, event| {
+        if event.state != ShortcutState::Pressed { return; }
+        show_action_menu(&app_handle, true);
+    }) {
+        eprintln!("[fennec] Failed to register {}: {}", shortcut, e);
+    } else {
+        println!("[fennec] Registered: {}", shortcut);
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -269,10 +392,23 @@ pub fn run() {
             get_config,
             update_config,
             check_accessibility,
+            pause_shortcuts,
+            resume_shortcuts,
             execute_action,
+            execute_action_deferred,
             undo_last,
         ])
         .setup(|app| {
+            // Hide from dock — menu bar only
+            #[cfg(target_os = "macos")]
+            {
+                use objc2::MainThreadMarker;
+                use objc2_app_kit::{NSApplication, NSApplicationActivationPolicy};
+                let mtm = unsafe { MainThreadMarker::new_unchecked() };
+                let ns_app = NSApplication::sharedApplication(mtm);
+                ns_app.setActivationPolicy(NSApplicationActivationPolicy::Accessory);
+            }
+
             // Check accessibility on startup
             if !ax::check_accessibility() {
                 eprintln!("[fennec] Accessibility permission required");
@@ -282,12 +418,20 @@ pub fn run() {
             register_shortcuts(&app.handle().clone());
 
             // Build tray menu
+            let version = app.config().version.clone().unwrap_or_default();
+            let version_item = MenuItemBuilder::with_id("version", format!("Fennec v{}", version))
+                .enabled(false)
+                .build(app)?;
+            let settings = MenuItemBuilder::with_id("settings", "Settings...").build(app)?;
+            let launch_login = tauri::menu::CheckMenuItemBuilder::with_id("launch_login", "Launch at login")
+                .checked(app.state::<AppState>().config.lock().unwrap().launch_at_login)
+                .build(app)?;
             let quit = MenuItemBuilder::with_id("quit", "Quit Fennec").build(app)?;
-            let correct = MenuItemBuilder::with_id("correct", "Smooth it out").build(app)?;
-            let correct_all = MenuItemBuilder::with_id("correct_all", "Smooth all text").build(app)?;
             let menu = MenuBuilder::new(app)
-                .item(&correct)
-                .item(&correct_all)
+                .item(&version_item)
+                .separator()
+                .item(&settings)
+                .item(&launch_login)
                 .separator()
                 .item(&quit)
                 .build()?;
@@ -297,19 +441,46 @@ pub fn run() {
                 tray.on_menu_event(move |app, event| {
                     match event.id().as_ref() {
                         "quit" => app.exit(0),
-                        "correct" => {
-                            let app = app.clone();
-                            tauri::async_runtime::spawn(async move {
-                                let state = app.state::<AppState>();
-                                let _ = execute_action_internal(&app, &state, "correct".into(), false).await;
-                            });
+                        "launch_login" => {
+                            let state = app.state::<AppState>();
+                            let mut config = state.config.lock().unwrap();
+                            config.launch_at_login = !config.launch_at_login;
+                            let enabled = config.launch_at_login;
+                            let _ = save_config(&config);
+                            drop(config);
+
+                            let autostart = app.autolaunch();
+                            if enabled {
+                                let _ = autostart.enable();
+                            } else {
+                                let _ = autostart.disable();
+                            }
                         }
-                        "correct_all" => {
-                            let app = app.clone();
-                            tauri::async_runtime::spawn(async move {
-                                let state = app.state::<AppState>();
-                                let _ = execute_action_internal(&app, &state, "correct".into(), true).await;
-                            });
+                        "settings" => {
+                            // Bring app to front (needed for Accessory apps)
+                            #[cfg(target_os = "macos")]
+                            {
+                                use objc2::MainThreadMarker;
+                                use objc2_app_kit::NSApplication;
+                                let mtm = unsafe { MainThreadMarker::new_unchecked() };
+                                let ns_app = NSApplication::sharedApplication(mtm);
+                                ns_app.activate();
+                            }
+
+                            if let Some(win) = app.get_webview_window("settings") {
+                                let _ = win.set_focus();
+                            } else {
+                                let _ = WebviewWindowBuilder::new(
+                                    app,
+                                    "settings",
+                                    WebviewUrl::App("settings.html".into()),
+                                )
+                                .title("")
+                                .inner_size(480.0, 540.0)
+                                .resizable(false)
+                                .center()
+                                .build();
+                            }
                         }
                         _ => {}
                     }
@@ -318,6 +489,11 @@ pub fn run() {
 
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app, event| {
+            if let tauri::RunEvent::ExitRequested { api, .. } = event {
+                api.prevent_exit();
+            }
+        });
 }

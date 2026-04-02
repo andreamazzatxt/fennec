@@ -2,6 +2,7 @@ use std::process::Command;
 use std::thread;
 use std::time::Duration;
 
+#[allow(dead_code)]
 pub fn simulate_copy() -> Result<(), String> {
     // Wait for modifier keys to release
     thread::sleep(Duration::from_millis(300));
@@ -16,6 +17,7 @@ pub fn simulate_copy() -> Result<(), String> {
     Ok(())
 }
 
+#[allow(dead_code)]
 pub fn simulate_paste() -> Result<(), String> {
     Command::new("osascript")
         .arg("-e")
@@ -25,6 +27,7 @@ pub fn simulate_paste() -> Result<(), String> {
     Ok(())
 }
 
+#[allow(dead_code)]
 pub fn simulate_select_all() -> Result<(), String> {
     thread::sleep(Duration::from_millis(300));
 
