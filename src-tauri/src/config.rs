@@ -39,7 +39,7 @@ impl Default for ShortcutConfig {
     fn default() -> Self {
         Self {
             correct: "CmdOrCtrl+Shift+.".into(),
-            correct_all: "CmdOrCtrl+Shift+;".into(),
+            correct_all: "CmdOrCtrl+Shift+,".into(),
             menu: "CmdOrCtrl+Shift+L".into(),
             menu_all: "CmdOrCtrl+Shift+'".into(),
             undo: "CmdOrCtrl+Shift+Z".into(),

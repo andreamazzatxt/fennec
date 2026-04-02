@@ -44,6 +44,6 @@ pub fn simulate_select_all() -> Result<(), String> {
 
 pub fn play_done_sound() {
     let _ = Command::new("afplay")
-        .arg("/System/Library/Sounds/Tink.aiff")
+        .arg("/System/Library/Sounds/Pop.aiff")
         .spawn();
 }
