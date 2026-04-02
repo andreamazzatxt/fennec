@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root {
+    --bg: rgba(250, 247, 240, 0.97);
+    --bg-solid: #FAF7F0;
+    --text-primary: #2C2416;
+    --text-secondary: #8A7D6B;
+    --text-tertiary: #B5A898;
+    --accent-sage: #7A9E7E;
+    --accent-sage-soft: rgba(122, 158, 126, 0.12);
+    --accent-sage-hover: rgba(122, 158, 126, 0.18);
+    --accent-clay: #C4956A;
+    --accent-clay-soft: rgba(196, 149, 106, 0.12);
+    --border: rgba(44, 36, 22, 0.06);
+    --border-hover: rgba(44, 36, 22, 0.10);
+    --shadow: 0 12px 40px rgba(44, 36, 22, 0.12), 0 2px 8px rgba(44, 36, 22, 0.06);
+    --radius: 12px;
+    --radius-item: 8px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+    background: transparent;
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+    overflow: hidden;
+  }
+
+  .popup {
+    background: var(--bg);
+    backdrop-filter: blur(40px) saturate(1.6);
+    -webkit-backdrop-filter: blur(40px) saturate(1.6);
+    border-radius: var(--radius);
+    border: 0.5px solid var(--border);
+    box-shadow: var(--shadow);
+    padding: 6px;
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+    animation: popupIn 0.15s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  @keyframes popupIn {
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .header {
+    padding: 8px 10px 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .header-icon {
+    font-size: 11px;
+    color: var(--accent-sage);
+  }
+
+  .header-text {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-tertiary);
+    letter-spacing: 0.3px;
+  }
+
+  .divider {
+    height: 0.5px;
+    background: var(--border);
+    margin: 2px 8px 4px;
+  }
+
+  .item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: var(--radius-item);
+    cursor: default;
+    transition: background 0.1s ease, transform 0.1s ease;
+    position: relative;
+  }
+
+  .item:hover, .item.selected {
+    background: var(--accent-sage-soft);
+  }
+
+  .item:active {
+    background: var(--accent-sage-hover);
+    transform: scale(0.985);
+  }
+
+  .item-icon {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 7px;
+    font-size: 12px;
+    flex-shrink: 0;
+    color: var(--accent-sage);
+    background: var(--accent-sage-soft);
+    transition: background 0.1s ease;
+  }
+
+  .item:hover .item-icon, .item.selected .item-icon {
+    background: var(--accent-sage-hover);
+  }
+
+  .item[data-category="tone"] .item-icon {
+    color: var(--accent-clay);
+    background: var(--accent-clay-soft);
+  }
+  .item[data-category="tone"]:hover .item-icon,
+  .item[data-category="tone"].selected .item-icon {
+    background: rgba(196, 149, 106, 0.18);
+  }
+
+  .item-content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .item-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    line-height: 1.2;
+    letter-spacing: -0.1px;
+  }
+
+  .item-subtitle {
+    font-size: 11px;
+    color: var(--text-secondary);
+    line-height: 1.3;
+    margin-top: 1px;
+  }
+
+  .item-shortcut {
+    font-size: 10px;
+    color: var(--text-tertiary);
+    font-weight: 500;
+    opacity: 0;
+    transition: opacity 0.1s ease;
+    flex-shrink: 0;
+  }
+
+  .item:hover .item-shortcut, .item.selected .item-shortcut {
+    opacity: 1;
+  }
+
+  .footer {
+    padding: 4px 10px 6px;
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+  }
+
+  .footer-hint {
+    font-size: 10px;
+    color: var(--text-tertiary);
+    display: flex;
+    align-items: center;
+    gap: 3px;
+  }
+
+  .kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 3px;
+    background: rgba(44, 36, 22, 0.05);
+    border: 0.5px solid rgba(44, 36, 22, 0.08);
+    font-size: 9px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-family: -apple-system, sans-serif;
+  }
+</style>
+</head>
+<body>
+  <div class="popup" id="popup">
+    <div class="header">
+      <span class="header-icon">🦊</span>
+      <span class="header-text">What should we do?</span>
+    </div>
+    <div class="divider"></div>
+    <div id="items"></div>
+    <div class="divider"></div>
+    <div class="footer">
+      <span class="footer-hint"><span class="kbd">↑↓</span> navigate</span>
+      <span class="footer-hint"><span class="kbd">⏎</span> select</span>
+      <span class="footer-hint"><span class="kbd">esc</span> dismiss</span>
+    </div>
+  </div>
+
+  <script>
+    const { ipcRenderer } = require("electron");
+    let selectedIndex = 0;
+    let actionIds = [];
+
+    ipcRenderer.on("load-actions", (event, actionsData) => {
+      const container = document.getElementById("items");
+      container.innerHTML = "";
+      actionIds = [];
+
+      actionsData.forEach((action, index) => {
+        actionIds.push(action.id);
+        const item = document.createElement("div");
+        item.className = "item" + (index === 0 ? " selected" : "");
+        item.dataset.index = index;
+        item.dataset.category = action.category;
+        item.innerHTML = `
+          <div class="item-icon">${action.icon}</div>
+          <div class="item-content">
+            <div class="item-label">${action.label}</div>
+            <div class="item-subtitle">${action.subtitle}</div>
+          </div>
+          <div class="item-shortcut">${index + 1}</div>
+        `;
+
+        item.addEventListener("mouseenter", () => {
+          setSelected(index);
+        });
+
+        item.addEventListener("click", () => {
+          selectAction(index);
+        });
+
+        container.appendChild(item);
+      });
+    });
+
+    function setSelected(index) {
+      const items = document.querySelectorAll(".item");
+      items.forEach(i => i.classList.remove("selected"));
+      selectedIndex = index;
+      if (items[index]) items[index].classList.add("selected");
+    }
+
+    function selectAction(index) {
+      const popup = document.getElementById("popup");
+      popup.style.animation = "none";
+      popup.style.opacity = "0";
+      popup.style.transform = "translateY(-2px) scale(0.98)";
+      popup.style.transition = "opacity 0.08s ease, transform 0.08s ease";
+
+      setTimeout(() => {
+        ipcRenderer.send("action-selected", actionIds[index]);
+      }, 80);
+    }
+
+    document.addEventListener("keydown", (e) => {
+      const items = document.querySelectorAll(".item");
+
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setSelected((selectedIndex + 1) % items.length);
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setSelected((selectedIndex - 1 + items.length) % items.length);
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        selectAction(selectedIndex);
+      } else if (e.key === "Escape") {
+        ipcRenderer.send("popup-close");
+      } else if (e.key >= "1" && e.key <= "9") {
+        const num = parseInt(e.key) - 1;
+        if (num < items.length) {
+          selectAction(num);
+        }
+      }
+    });
+  </script>
+</body>
+</html>

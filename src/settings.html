@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root {
+    --bg: #FAF7F0;
+    --text-primary: #2C2416;
+    --text-secondary: #8A7D6B;
+    --text-tertiary: #B5A898;
+    --accent-sage: #7A9E7E;
+    --accent-red: #C46A6A;
+    --border: rgba(44, 36, 22, 0.10);
+    --input-bg: rgba(44, 36, 22, 0.04);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+    background: var(--bg);
+    color: var(--text-primary);
+    -webkit-font-smoothing: antialiased;
+    padding: 0;
+    user-select: none;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .bg-fennec {
+    position: fixed;
+    bottom: -10px;
+    left: -2px;
+    width: 180px;
+    height: 180px;
+    opacity: 0.15;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .drag-region {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 36px;
+    -webkit-app-region: drag;
+    z-index: 10;
+  }
+
+  .scroll-container {
+    height: calc(100vh - 36px - 34px - 52px);
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .scroll-container::-webkit-scrollbar { width: 6px; }
+  .scroll-container::-webkit-scrollbar-track { background: transparent; }
+  .scroll-container::-webkit-scrollbar-thumb {
+    background: rgba(44, 36, 22, 0.12);
+    border-radius: 3px;
+  }
+  .scroll-container::-webkit-scrollbar-thumb:hover {
+    background: rgba(44, 36, 22, 0.22);
+  }
+
+  .tabs {
+    display: flex;
+    padding: 40px 24px 0;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .tab {
+    padding: 8px 16px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: color 0.15s ease, border-color 0.15s ease;
+  }
+
+  .tab:hover { color: var(--text-primary); }
+
+  .tab.active {
+    color: var(--accent-sage);
+    border-bottom-color: var(--accent-sage);
+  }
+
+  .tab-content {
+    display: none;
+    padding: 20px 24px;
+  }
+
+  .tab-content.active {
+    display: block;
+    animation: tabIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  @keyframes tabIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .shortcut-row, .accordion, .custom-action-card {
+    opacity: 0;
+    transform: translateY(8px);
+    animation: itemIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  .shortcut-row:nth-child(1), .accordion:nth-child(1), .custom-action-card:nth-child(1) { animation-delay: 0.03s; }
+  .shortcut-row:nth-child(2), .accordion:nth-child(2), .custom-action-card:nth-child(2) { animation-delay: 0.07s; }
+  .shortcut-row:nth-child(3), .accordion:nth-child(3), .custom-action-card:nth-child(3) { animation-delay: 0.11s; }
+  .shortcut-row:nth-child(4), .custom-action-card:nth-child(4) { animation-delay: 0.15s; }
+  .shortcut-row:nth-child(5), .custom-action-card:nth-child(5) { animation-delay: 0.19s; }
+
+  @keyframes itemIn {
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* --- Shortcuts --- */
+
+  .shortcut-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 0.5px solid var(--border);
+  }
+
+  .shortcut-row:last-child { border-bottom: none; }
+
+  .shortcut-label { font-size: 13px; font-weight: 500; }
+
+  .shortcut-desc {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 1px;
+  }
+
+  .shortcut-input {
+    min-width: 140px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--input-bg);
+    font-family: -apple-system, sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-primary);
+    text-align: center;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.15s ease;
+  }
+
+  .shortcut-input.recording {
+    border-color: var(--accent-sage);
+    background: white;
+    color: var(--accent-sage);
+  }
+
+  /* --- Providers / Accordion --- */
+
+  .accordion {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 10px;
+  }
+
+  .accordion-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    cursor: pointer;
+    background: white;
+    transition: background 0.1s ease;
+  }
+
+  .accordion-header:hover { background: var(--input-bg); }
+
+  .accordion-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .accordion-chevron {
+    font-size: 10px;
+    color: var(--text-tertiary);
+    transition: transform 0.2s ease;
+  }
+
+  .accordion.open .accordion-chevron { transform: rotate(90deg); }
+
+  .accordion-name { font-size: 13px; font-weight: 500; }
+
+  .status-pill {
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+  }
+
+  .status-pill.ok {
+    background: rgba(122, 158, 126, 0.12);
+    color: var(--accent-sage);
+  }
+
+  .status-pill.missing {
+    background: rgba(196, 106, 106, 0.12);
+    color: var(--accent-red);
+  }
+
+  .accordion-body {
+    display: none;
+    padding: 0 14px 14px;
+    background: white;
+  }
+
+  .accordion.open .accordion-body { display: block; }
+
+  /* --- Fields --- */
+
+  .field { margin-bottom: 12px; }
+  .field:last-child { margin-bottom: 0; }
+
+  .field-label {
+    font-size: 12px;
+    font-weight: 500;
+    margin-bottom: 4px;
+  }
+
+  .field-desc {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+  }
+
+  .text-input {
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--input-bg);
+    font-family: -apple-system, sans-serif;
+    font-size: 12px;
+    color: var(--text-primary);
+    outline: none;
+    transition: border-color 0.15s ease;
+  }
+
+  .text-input:focus {
+    border-color: var(--accent-sage);
+    background: white;
+  }
+
+  .text-input.mono {
+    font-family: "SF Mono", "Menlo", monospace;
+    font-size: 11px;
+  }
+
+  textarea.text-input {
+    resize: vertical;
+    min-height: 60px;
+    line-height: 1.4;
+  }
+
+  /* --- Custom Actions --- */
+
+  .custom-action-card {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+    background: white;
+    position: relative;
+  }
+
+  .custom-action-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+
+  .custom-action-title {
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .remove-btn {
+    font-size: 11px;
+    color: var(--accent-red);
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: none;
+    background: rgba(196, 106, 106, 0.08);
+  }
+
+  .remove-btn:hover {
+    background: rgba(196, 106, 106, 0.16);
+  }
+
+  .add-btn {
+    width: 100%;
+    padding: 10px;
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease;
+  }
+
+  .add-btn:hover {
+    border-color: var(--accent-sage);
+    color: var(--accent-sage);
+  }
+
+  /* --- Buttons --- */
+
+  .buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 0 24px 20px;
+  }
+
+  button {
+    padding: 6px 16px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: white;
+    font-family: -apple-system, sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-primary);
+    cursor: pointer;
+  }
+
+  button.primary {
+    background: var(--accent-sage);
+    border-color: var(--accent-sage);
+    color: white;
+  }
+
+  button:hover { opacity: 0.9; }
+</style>
+</head>
+<body>
+  <img class="bg-fennec" src="../assets/fennec_clean.png">
+  <div class="drag-region"></div>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="shortcuts">Shortcuts</div>
+    <div class="tab" data-tab="actions">Custom Actions</div>
+    <div class="tab" data-tab="providers">AI Providers</div>
+  </div>
+
+  <div class="scroll-container">
+
+  <!-- Shortcuts Tab -->
+  <div class="tab-content active" id="tab-shortcuts">
+    <div class="shortcut-row">
+      <div>
+        <div class="shortcut-label">Smooth it out</div>
+        <div class="shortcut-desc">Correct selected text</div>
+      </div>
+      <input class="shortcut-input" data-key="correct" readonly placeholder="Press keys...">
+    </div>
+
+    <div class="shortcut-row">
+      <div>
+        <div class="shortcut-label">Smooth all text</div>
+        <div class="shortcut-desc">Select all + correct</div>
+      </div>
+      <input class="shortcut-input" data-key="correctAll" readonly placeholder="Press keys...">
+    </div>
+
+    <div class="shortcut-row">
+      <div>
+        <div class="shortcut-label">More options</div>
+        <div class="shortcut-desc">Open action menu</div>
+      </div>
+      <input class="shortcut-input" data-key="menu" readonly placeholder="Press keys...">
+    </div>
+
+    <div class="shortcut-row">
+      <div>
+        <div class="shortcut-label">More options for all</div>
+        <div class="shortcut-desc">Select all + open action menu</div>
+      </div>
+      <input class="shortcut-input" data-key="menuAll" readonly placeholder="Press keys...">
+    </div>
+
+    <div class="shortcut-row">
+      <div>
+        <div class="shortcut-label">Undo last</div>
+        <div class="shortcut-desc">Restore original text</div>
+      </div>
+      <input class="shortcut-input" data-key="undo" readonly placeholder="Press keys...">
+    </div>
+  </div>
+
+  <!-- Custom Actions Tab -->
+  <div class="tab-content" id="tab-actions">
+    <div class="field-desc" style="margin-bottom: 14px;">
+      Create your own text transformations. Each action needs a name, description, and a prompt that tells the AI what to do.
+    </div>
+    <div id="custom-actions-list"></div>
+    <button class="add-btn" onclick="addCustomAction()">+ Add action</button>
+  </div>
+
+  <!-- AI Providers Tab -->
+  <div class="tab-content" id="tab-providers">
+    <div class="accordion" id="accordion-radicalbit">
+      <div class="accordion-header" onclick="toggleAccordion('radicalbit')">
+        <div class="accordion-left">
+          <span class="accordion-chevron">▶</span>
+          <span class="accordion-name">Radicalbit AI Gateway</span>
+        </div>
+        <span class="status-pill" id="pill-radicalbit">Configured</span>
+      </div>
+      <div class="accordion-body">
+        <div class="field">
+          <div class="field-label">API Key</div>
+          <input class="text-input mono" type="password" id="apiKey" placeholder="Enter your API key..." oninput="updatePillStatus()">
+        </div>
+        <div class="field">
+          <div class="field-label">Endpoint</div>
+          <input class="text-input mono" type="text" id="endpoint" oninput="updatePillStatus()">
+        </div>
+        <div class="field">
+          <div class="field-label">Model</div>
+          <input class="text-input mono" type="text" id="model" oninput="updatePillStatus()">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  </div>
+
+  <div class="buttons">
+    <button onclick="cancel()">Cancel</button>
+    <button class="primary" onclick="save()">Save</button>
+  </div>
+
+  <script>
+    const { ipcRenderer } = require("electron");
+
+    let shortcuts = {};
+    let customActions = [];
+    let activeInput = null;
+
+    // --- Tabs ---
+    document.querySelectorAll(".tab").forEach(tab => {
+      tab.addEventListener("click", () => {
+        document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+        document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
+        tab.classList.add("active");
+        document.getElementById("tab-" + tab.dataset.tab).classList.add("active");
+      });
+    });
+
+    function switchToTab(tabName) {
+      document.querySelectorAll(".tab").forEach(t => {
+        t.classList.toggle("active", t.dataset.tab === tabName);
+      });
+      document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
+      document.getElementById("tab-" + tabName).classList.add("active");
+    }
+
+    // --- Accordion ---
+    function toggleAccordion(id) {
+      document.getElementById("accordion-" + id).classList.toggle("open");
+    }
+
+    function updatePillStatus() {
+      const apiKey = document.getElementById("apiKey").value.trim();
+      const endpoint = document.getElementById("endpoint").value.trim();
+      const model = document.getElementById("model").value.trim();
+      const pill = document.getElementById("pill-radicalbit");
+
+      if (apiKey && endpoint && model) {
+        pill.textContent = "Configured";
+        pill.className = "status-pill ok";
+      } else {
+        pill.textContent = "Missing config";
+        pill.className = "status-pill missing";
+      }
+    }
+
+    // --- Load config ---
+    ipcRenderer.on("load-config", (event, config, initialTab) => {
+      shortcuts = { ...config.shortcuts };
+      customActions = config.customActions || [];
+      document.getElementById("apiKey").value = config.apiKey || "";
+      document.getElementById("endpoint").value = config.endpoint || "";
+      document.getElementById("model").value = config.model || "";
+      updateShortcutDisplay();
+      updatePillStatus();
+      renderCustomActions();
+
+      if (initialTab) {
+        switchToTab(initialTab);
+        if (initialTab === "providers") {
+          toggleAccordion("radicalbit");
+        }
+      }
+    });
+
+    function updateShortcutDisplay() {
+      document.querySelectorAll(".shortcut-input").forEach(input => {
+        const key = input.dataset.key;
+        if (shortcuts[key]) {
+          input.value = formatShortcut(shortcuts[key]);
+        }
+      });
+    }
+
+    function formatShortcut(accelerator) {
+      return accelerator
+        .replace("CommandOrControl+", "⌘")
+        .replace("Shift+", "⇧")
+        .replace("Alt+", "⌥")
+        .replace("Control+", "⌃");
+    }
+
+    function keyEventToAccelerator(e) {
+      const parts = [];
+      if (e.metaKey) parts.push("CommandOrControl");
+      if (e.ctrlKey && !e.metaKey) parts.push("Control");
+      if (e.altKey) parts.push("Alt");
+      if (e.shiftKey) parts.push("Shift");
+
+      const key = e.key;
+      if (!["Meta", "Control", "Alt", "Shift"].includes(key)) {
+        const keyMap = {
+          ";": ";", ".": ".", ",": ",", "/": "/", "'": "'",
+          "[": "[", "]": "]", "\\": "\\", "-": "-", "=": "=", "`": "`",
+        };
+        const mapped = keyMap[key] || key.toUpperCase();
+        parts.push(mapped);
+      }
+
+      if (parts.length <= 1) return null;
+      return parts.join("+");
+    }
+
+    let recording = false;
+    const MODIFIER_KEYS = new Set(["Meta", "Control", "Alt", "Shift"]);
+
+    function getModifierDisplay(e) {
+      const parts = [];
+      if (e.metaKey) parts.push("⌘");
+      if (e.ctrlKey && !e.metaKey) parts.push("⌃");
+      if (e.altKey) parts.push("⌥");
+      if (e.shiftKey) parts.push("⇧");
+      return parts.join("") || "Press keys...";
+    }
+
+    document.querySelectorAll(".shortcut-input").forEach(input => {
+      input.addEventListener("click", () => {
+        activeInput = input;
+        recording = true;
+        input.classList.add("recording");
+        input.value = "Press keys...";
+      });
+
+      input.addEventListener("keydown", (e) => {
+        if (!recording) return;
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (e.key === "Escape") {
+          recording = false;
+          input.classList.remove("recording");
+          input.value = formatShortcut(shortcuts[input.dataset.key] || "");
+          activeInput = null;
+          return;
+        }
+
+        if (MODIFIER_KEYS.has(e.key)) {
+          input.value = getModifierDisplay(e) + "...";
+          return;
+        }
+
+        const accelerator = keyEventToAccelerator(e);
+        if (accelerator) {
+          shortcuts[input.dataset.key] = accelerator;
+          input.value = formatShortcut(accelerator);
+          input.classList.remove("recording");
+          recording = false;
+          activeInput = null;
+        }
+      });
+
+      input.addEventListener("keyup", (e) => {
+        if (!recording) return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (MODIFIER_KEYS.has(e.key)) {
+          const still = [];
+          if (e.metaKey) still.push("⌘");
+          if (e.ctrlKey) still.push("⌃");
+          if (e.altKey) still.push("⌥");
+          if (e.shiftKey) still.push("⇧");
+          input.value = still.length ? still.join("") + "..." : "Press keys...";
+        }
+      });
+    });
+
+    // --- Custom Actions ---
+    function renderCustomActions() {
+      const container = document.getElementById("custom-actions-list");
+      container.innerHTML = "";
+
+      customActions.forEach((action, index) => {
+        const card = document.createElement("div");
+        card.className = "custom-action-card";
+        card.innerHTML = `
+          <div class="custom-action-header">
+            <span class="custom-action-title">${action.label || "New action"}</span>
+            <button class="remove-btn" onclick="removeCustomAction(${index})">Remove</button>
+          </div>
+          <div class="field">
+            <div class="field-label">Name</div>
+            <input class="text-input" type="text" value="${escapeHtml(action.label)}" placeholder="e.g. Translate to English"
+              oninput="updateCustomAction(${index}, 'label', this.value)">
+          </div>
+          <div class="field">
+            <div class="field-label">Description</div>
+            <input class="text-input" type="text" value="${escapeHtml(action.subtitle)}" placeholder="Short description"
+              oninput="updateCustomAction(${index}, 'subtitle', this.value)">
+          </div>
+          <div class="field">
+            <div class="field-label">Prompt</div>
+            <textarea class="text-input" placeholder="e.g. Translate the following text to English"
+              oninput="updateCustomAction(${index}, 'prompt', this.value)">${escapeHtml(action.prompt)}</textarea>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function escapeHtml(str) {
+      return (str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+
+    function addCustomAction() {
+      customActions.push({
+        id: "action_" + Date.now(),
+        label: "",
+        subtitle: "",
+        prompt: "",
+      });
+      renderCustomActions();
+    }
+
+    function removeCustomAction(index) {
+      customActions.splice(index, 1);
+      renderCustomActions();
+    }
+
+    function updateCustomAction(index, field, value) {
+      customActions[index][field] = value;
+      // Update card title live
+      const cards = document.querySelectorAll(".custom-action-card");
+      if (cards[index] && field === "label") {
+        cards[index].querySelector(".custom-action-title").textContent = value || "New action";
+      }
+    }
+
+    // --- Save / Cancel ---
+    function save() {
+      const config = {
+        apiKey: document.getElementById("apiKey").value,
+        endpoint: document.getElementById("endpoint").value,
+        model: document.getElementById("model").value,
+        shortcuts: shortcuts,
+        customActions: customActions.filter(a => a.label && a.prompt),
+      };
+      ipcRenderer.send("save-config", config);
+    }
+
+    function cancel() {
+      ipcRenderer.send("close-settings");
+    }
+  </script>
+</body>
+</html>

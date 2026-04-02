@@ -1,0 +1,64 @@
+{
+  "name": "fennec",
+  "version": "1.0.0",
+  "description": "AI-powered text correction from any input field",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "tsc && electron .",
+    "dev": "tsc --watch & electronmon .",
+    "pack": "tsc && electron-builder --dir",
+    "dist": "tsc && electron-builder"
+  },
+  "build": {
+    "appId": "ai.fennec.app",
+    "productName": "Fennec",
+    "publish": {
+      "provider": "github",
+      "owner": "andreamazzatxt",
+      "repo": "fennec"
+    },
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "assets/icon.icns",
+      "target": ["dmg", "zip"]
+    },
+    "dmg": {
+      "title": "Fennec",
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    },
+    "files": [
+      "dist/**/*",
+      "src/*.html",
+      "assets/**/*",
+      "!assets/*.svg",
+      "!assets/icon.iconset"
+    ],
+    "extraMetadata": {
+      "main": "dist/main.js"
+    }
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "electron": "^41.1.1",
+    "electron-builder": "^26.8.1",
+    "electronmon": "^2.0.4",
+    "typescript": "^6.0.2"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.3"
+  }
+}
