@@ -1,6 +1,6 @@
 {
   "name": "fennec",
-  "version": "1.0.0",
+  "version": "0.1.0-alpha",
   "description": "AI-powered text correction from any input field",
   "main": "dist/main.js",
   "scripts": {
