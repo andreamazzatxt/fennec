@@ -56,6 +56,40 @@ fn update_config(app: AppHandle, state: tauri::State<AppState>, new_config: Fenn
 }
 
 #[tauri::command]
+async fn fetch_openai_models(api_key: String) -> Result<Vec<String>, String> {
+    #[derive(serde::Deserialize)]
+    struct Model {
+        id: String,
+    }
+    #[derive(serde::Deserialize)]
+    struct ModelsResponse {
+        data: Vec<Model>,
+    }
+
+    let client = reqwest::Client::new();
+    let resp = client
+        .get("https://api.openai.com/v1/models")
+        .header("Authorization", format!("Bearer {}", api_key))
+        .send()
+        .await
+        .map_err(|e| format!("Request failed: {}", e))?;
+
+    if !resp.status().is_success() {
+        return Err(format!("OpenAI API error: {}", resp.status()));
+    }
+
+    let models: ModelsResponse = resp.json().await.map_err(|e| format!("Parse error: {}", e))?;
+    let mut ids: Vec<String> = models
+        .data
+        .into_iter()
+        .map(|m| m.id)
+        .filter(|id| id.starts_with("gpt-") || id.starts_with("o") || id.starts_with("chatgpt-"))
+        .collect();
+    ids.sort();
+    Ok(ids)
+}
+
+#[tauri::command]
 fn pause_shortcuts(app: AppHandle) {
     unregister_shortcuts(&app);
 }
@@ -82,6 +116,35 @@ fn reset_accessibility() -> Result<String, String> {
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
         Err(format!("tccutil failed: {}", stderr))
+    }
+}
+
+#[tauri::command]
+async fn check_for_update(app: AppHandle) -> Result<Option<String>, String> {
+    use tauri_plugin_updater::UpdaterExt;
+    let updater = app.updater().map_err(|e| format!("{}", e))?;
+    match updater.check().await {
+        Ok(Some(update)) => Ok(Some(update.version.clone())),
+        Ok(None) => Ok(None),
+        Err(e) => Err(format!("{}", e)),
+    }
+}
+
+#[tauri::command]
+async fn install_update(app: AppHandle) -> Result<(), String> {
+    use tauri_plugin_updater::UpdaterExt;
+    let updater = app.updater().map_err(|e| format!("{}", e))?;
+    match updater.check().await {
+        Ok(Some(update)) => {
+            let mut bytes = Vec::new();
+            update.download_and_install(
+                |chunk_len, _content_len| { bytes.extend(std::iter::repeat(0u8).take(chunk_len)); },
+                || {},
+            ).await.map_err(|e| format!("{}", e))?;
+            Ok(())
+        }
+        Ok(None) => Err("No update available".into()),
+        Err(e) => Err(format!("{}", e)),
     }
 }
 
@@ -125,34 +188,6 @@ fn restart_app(app: AppHandle) {
     }
 }
 
-#[tauri::command]
-async fn check_for_update(app: AppHandle) -> Result<Option<String>, String> {
-    use tauri_plugin_updater::UpdaterExt;
-    let updater = app.updater().map_err(|e| format!("{}", e))?;
-    match updater.check().await {
-        Ok(Some(update)) => Ok(Some(update.version.clone())),
-        Ok(None) => Ok(None),
-        Err(e) => Err(format!("{}", e)),
-    }
-}
-
-#[tauri::command]
-async fn install_update(app: AppHandle) -> Result<(), String> {
-    use tauri_plugin_updater::UpdaterExt;
-    let updater = app.updater().map_err(|e| format!("{}", e))?;
-    match updater.check().await {
-        Ok(Some(update)) => {
-            let mut bytes = Vec::new();
-            update.download_and_install(
-                |chunk_len, _content_len| { bytes.extend(std::iter::repeat(0u8).take(chunk_len)); },
-                || {},
-            ).await.map_err(|e| format!("{}", e))?;
-            Ok(())
-        }
-        Ok(None) => Err("No update available".into()),
-        Err(e) => Err(format!("{}", e)),
-    }
-}
 
 #[tauri::command]
 async fn install_tap_helper(app: AppHandle, sensitivity: String) -> Result<(), String> {
@@ -729,6 +764,7 @@ pub fn run() {
             check_tap_helper_status,
             check_tap_hardware,
             test_tap_helper,
+            fetch_openai_models,
         ])
         .setup(|app| {
             // Hide from dock — menu bar only

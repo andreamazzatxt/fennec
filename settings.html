@@ -285,6 +285,7 @@
         margin-bottom: 4px;
       }
 
+      .field-group select,
       .field-group input[type="text"],
       .field-group input[type="password"] {
         width: 100%;
@@ -308,7 +309,8 @@
         font-size: 12px;
       }
 
-      .field-group input:focus {
+      .field-group input:focus,
+      .field-group select:focus {
         border-color: var(--input-focus);
         box-shadow: 0 0 0 3px var(--sage-bg);
       }
@@ -871,6 +873,13 @@
       ::-webkit-scrollbar { width: 5px; }
       ::-webkit-scrollbar-track { background: transparent; }
       ::-webkit-scrollbar-thumb { background: var(--text-dim); border-radius: 3px; }
+
+      .version-info {
+        text-align: center;
+        font-size: 11px;
+        color: var(--text-dim);
+        margin-bottom: 10px;
+      }
     </style>
   </head>
   <body>
@@ -987,7 +996,9 @@
                 </div>
                 <div class="field-group">
                   <label for="oaiModel">Model</label>
-                  <input type="text" id="oaiModel" placeholder="e.g. gpt-4o" />
+                  <select id="oaiModel" disabled>
+                    <option value="">Enter API key to load models</option>
+                  </select>
                 </div>
                 <button class="btn-save section-save" id="saveOai" disabled>Save</button>
               </div>
@@ -1005,6 +1016,7 @@
 
       <!-- General panel -->
       <div class="panel" id="panel-general">
+        <div class="version-info">v<span id="appVersion">0.0.0</span></div>
         <div class="action-list">
           <div class="action-row" id="updateRow">
             <div class="action-info">

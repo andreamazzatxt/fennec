@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { getVersion } from "@tauri-apps/api/app";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 interface FennecConfig {
@@ -34,7 +35,7 @@ function buildConfig(): FennecConfig {
     endpoint: $("rbEndpoint").value,
     model: $("rbModel").value,
     openaiApiKey: $("oaiApiKey").value,
-    openaiModel: $("oaiModel").value,
+    openaiModel: (document.getElementById("oaiModel") as HTMLSelectElement).value,
     shortcuts: {
       correct: shortcuts.correct,
       correctAll: shortcuts.correctAll,
@@ -70,7 +71,9 @@ function wireSectionSave(btnId: string, inputIds: string[]) {
   const btn = document.getElementById(btnId) as HTMLButtonElement;
   if (!btn) return;
   for (const id of inputIds) {
-    $(id).addEventListener("input", () => { btn.disabled = false; });
+    const el = $(id);
+    const event = el.tagName === "SELECT" ? "change" : "input";
+    el.addEventListener(event, () => { btn.disabled = false; });
   }
   btn.addEventListener("click", async () => {
     try {
@@ -339,6 +342,38 @@ function renderCustomActions() {
   });
 }
 
+const MODEL_DESC: Record<string, string> = {
+  "gpt-4o": "Fast and smart, best value",
+  "gpt-4o-mini": "Lightweight, very cheap",
+  "gpt-4.1": "Best overall, complex tasks",
+  "gpt-4.1-mini": "Fast, good for simple tasks",
+  "gpt-4.1-nano": "Fastest, ultra cheap",
+  "o3-mini": "Reasoning, slower but precise",
+  "o3": "Best reasoning, most expensive",
+  "o4-mini": "Efficient reasoning",
+  "chatgpt-4o-latest": "Latest ChatGPT model",
+};
+
+async function loadOpenAIModels(apiKey: string, selectedModel?: string) {
+  const select = document.getElementById("oaiModel") as HTMLSelectElement;
+  select.disabled = true;
+  select.innerHTML = '<option value="">Loading models...</option>';
+  try {
+    const models = await invoke<string[]>("fetch_openai_models", { apiKey });
+    select.innerHTML = models.map(m => {
+      const desc = MODEL_DESC[m];
+      const label = desc ? `${m} — ${desc}` : m;
+      return `<option value="${m}">${label}</option>`;
+    }).join("");
+    if (selectedModel && models.includes(selectedModel)) {
+      select.value = selectedModel;
+    }
+    select.disabled = false;
+  } catch (e) {
+    select.innerHTML = '<option value="">Failed to load models</option>';
+  }
+}
+
 async function init() {
   const config = await invoke<FennecConfig>("get_config");
   console.log("[settings] config loaded:", JSON.stringify(config));
@@ -348,8 +383,23 @@ async function init() {
   $("rbEndpoint").value = config.endpoint;
   $("rbModel").value = config.model;
   $("oaiApiKey").value = config.openaiApiKey || "";
-  $("oaiModel").value = config.openaiModel || "";
   selectProvider(config.provider || "radicalbit", false);
+
+  // Load OpenAI models if API key is present
+  if (config.openaiApiKey) {
+    await loadOpenAIModels(config.openaiApiKey, config.openaiModel || "gpt-4o");
+  }
+
+  // Reload models when API key changes (on blur to avoid spamming)
+  $("oaiApiKey").addEventListener("blur", async () => {
+    const key = $("oaiApiKey").value.trim();
+    if (key) {
+      await loadOpenAIModels(key);
+    }
+  });
+
+  // Show app version
+  $el("appVersion").textContent = await getVersion();
 
   // Store shortcuts
   shortcuts = { ...config.shortcuts };
