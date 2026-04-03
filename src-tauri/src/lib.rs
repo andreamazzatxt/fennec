@@ -72,14 +72,13 @@ fn check_accessibility() -> bool {
 }
 
 #[tauri::command]
-fn reset_accessibility(app: AppHandle) -> Result<String, String> {
+fn reset_accessibility() -> Result<String, String> {
     let output = std::process::Command::new("tccutil")
         .args(["reset", "Accessibility", "ai.fennec.app"])
         .output()
         .map_err(|e| format!("Failed to run tccutil: {}", e))?;
     if output.status.success() {
-        // Restart the app so macOS re-prompts for Accessibility permission
-        app.restart();
+        Ok("Permissions reset. Click Restart to re-grant.".into())
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
         Err(format!("tccutil failed: {}", stderr))
@@ -88,7 +87,42 @@ fn reset_accessibility(app: AppHandle) -> Result<String, String> {
 
 #[tauri::command]
 fn restart_app(app: AppHandle) {
-    let _ = app.restart();
+    // Use `open` to relaunch from the actual bundle path (works after updates)
+    // app.restart() can fail after updater replaces the binary
+    let bundle_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .join("target/release/bundle/macos/Fennec.app");
+
+    // In production, the app lives at /Applications/Fennec.app or similar
+    // Get the actual bundle path from the running process
+    let app_path = std::env::current_exe()
+        .ok()
+        .and_then(|p| {
+            // Walk up from .app/Contents/MacOS/fennec to .app
+            let mut path = p;
+            for _ in 0..3 {
+                path = path.parent()?.to_path_buf();
+            }
+            if path.extension().map_or(false, |e| e == "app") {
+                Some(path)
+            } else {
+                None
+            }
+        });
+
+    if let Some(path) = app_path {
+        let _ = std::process::Command::new("open")
+            .arg("-n")
+            .arg(&path)
+            .spawn();
+        // Give `open` a moment to launch, then exit
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        app.exit(0);
+    } else {
+        // Fallback
+        let _ = app.restart();
+    }
 }
 
 #[tauri::command]
@@ -718,9 +752,10 @@ pub fn run() {
                 }
             }
 
-            // Check accessibility on startup
+            // Check accessibility on startup (silent check first)
             if !ax::check_accessibility() {
-                eprintln!("[fennec] Accessibility permission required");
+                eprintln!("[fennec] Accessibility permission not granted, showing prompt");
+                ax::check_accessibility_with_prompt();
             }
 
             // Register global shortcuts from Rust

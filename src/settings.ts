@@ -514,16 +514,18 @@ async function init() {
   // ── General: Reset Accessibility ──
   $el("resetAxBtn").addEventListener("click", async () => {
     const btn = $el("resetAxBtn") as HTMLButtonElement;
+    const subtitle = document.querySelector("#resetAxRow .action-subtitle") as HTMLElement;
     btn.disabled = true;
     btn.textContent = "Resetting...";
     try {
       const msg = await invoke<string>("reset_accessibility");
-      btn.textContent = "Done";
-      const subtitle = document.querySelector("#resetAxRow .action-subtitle") as HTMLElement;
       subtitle.textContent = msg;
+      btn.textContent = "Restart";
+      btn.classList.remove("btn-action-warn");
+      btn.disabled = false;
+      btn.onclick = () => { invoke("restart_app"); };
     } catch (e: any) {
       btn.textContent = "Failed";
-      const subtitle = document.querySelector("#resetAxRow .action-subtitle") as HTMLElement;
       subtitle.textContent = `${e}`;
       btn.disabled = false;
     }

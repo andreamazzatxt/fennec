@@ -3,8 +3,13 @@ use core_foundation::base::{CFTypeRef, TCFType};
 use core_foundation::string::{CFString, CFStringRef};
 use std::ptr;
 
-/// Check if the app has accessibility permissions
+/// Check if the app has accessibility permissions (silent, no prompt)
 pub fn check_accessibility() -> bool {
+    macos_accessibility_client::accessibility::application_is_trusted()
+}
+
+/// Check with prompt — only call when the user explicitly requests it
+pub fn check_accessibility_with_prompt() -> bool {
     macos_accessibility_client::accessibility::application_is_trusted_with_prompt()
 }
 
