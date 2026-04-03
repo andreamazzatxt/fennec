@@ -164,8 +164,3 @@ In dev mode, the tray icon is red to distinguish it from the production app.
 
 The app requires Accessibility permissions to read and write text in other apps.
 
----
-
-<p align="center">
-  <sub>Built with care by the Radicalbit team.</sub>
-</p>
