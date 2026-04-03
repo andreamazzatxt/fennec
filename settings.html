@@ -498,6 +498,30 @@
         box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--sage);
       }
 
+      /* ── Logs ── */
+      .log-container {
+        font-family: "Fira Code", monospace;
+        font-size: 11px;
+        line-height: 1.6;
+        color: var(--text-secondary);
+        background: var(--surface);
+        border: 1px solid var(--surface-border);
+        border-radius: 10px;
+        padding: 12px 14px;
+        height: 100%;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        word-break: break-all;
+        -webkit-user-select: text;
+        user-select: text;
+      }
+
+      .log-container:empty::after {
+        content: "No logs yet...";
+        color: var(--text-dim);
+        font-style: italic;
+      }
+
       /* ── Scrollbar ── */
       ::-webkit-scrollbar { width: 5px; }
       ::-webkit-scrollbar-track { background: transparent; }
@@ -512,6 +536,7 @@
     <div class="tabs">
       <button class="tab active" data-tab="shortcuts">Shortcuts</button>
       <button class="tab" data-tab="connection">Connection</button>
+      <button class="tab" data-tab="logs">Logs</button>
     </div>
 
     <!-- Panels -->
@@ -621,6 +646,11 @@
           </div>
 
         </div>
+      </div>
+
+      <!-- Logs panel -->
+      <div class="panel" id="panel-logs">
+        <div class="log-container" id="logContainer"></div>
       </div>
 
     </div>

@@ -170,6 +170,15 @@ async function init() {
   const tabs = document.querySelectorAll<HTMLButtonElement>(".tab");
   const panels = document.querySelectorAll<HTMLElement>(".panel");
 
+  let logsInterval: ReturnType<typeof setInterval> | null = null;
+
+  async function loadLogs() {
+    const logs = await invoke<string[]>("get_logs");
+    const container = $el("logContainer");
+    container.textContent = logs.join("\n");
+    container.scrollTop = container.scrollHeight;
+  }
+
   tabs.forEach((tab) => {
     tab.addEventListener("click", () => {
       stopRecording();
@@ -177,6 +186,13 @@ async function init() {
       panels.forEach((p) => p.classList.remove("active"));
       tab.classList.add("active");
       $el("panel-" + tab.dataset.tab!).classList.add("active");
+
+      // Auto-refresh logs when Logs tab is active
+      if (logsInterval) { clearInterval(logsInterval); logsInterval = null; }
+      if (tab.dataset.tab === "logs") {
+        loadLogs();
+        logsInterval = setInterval(loadLogs, 2000);
+      }
     });
   });
 

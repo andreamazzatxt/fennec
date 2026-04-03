@@ -18,11 +18,30 @@ struct AppState {
     config: Mutex<FennecConfig>,
     last_original: Mutex<Option<String>>,
     is_loading: AtomicBool,
+    logs: Mutex<Vec<String>>,
+}
+
+fn app_log(state: &AppState, msg: &str) {
+    let timestamp = chrono::Local::now().format("%H:%M:%S").to_string();
+    let entry = format!("[{}] {}", timestamp, msg);
+    eprintln!("{}", entry);
+    let mut logs = state.logs.lock().unwrap();
+    logs.push(entry);
+    // Keep last 200 lines
+    if logs.len() > 200 {
+        let excess = logs.len() - 200;
+        logs.drain(..excess);
+    }
 }
 
 #[tauri::command]
 fn get_config(state: tauri::State<AppState>) -> FennecConfig {
     state.config.lock().unwrap().clone()
+}
+
+#[tauri::command]
+fn get_logs(state: tauri::State<AppState>) -> Vec<String> {
+    state.logs.lock().unwrap().clone()
 }
 
 #[tauri::command]
@@ -65,7 +84,7 @@ async fn execute_action_internal(
         return Err("API key not configured".into());
     }
 
-    println!("[fennec] Executing action: {} (select_all: {})", action_id, select_all);
+    app_log(state, &format!("Action: {} (select_all: {})", action_id, select_all));
 
     let read_result = if select_all {
         let text = ax::select_all_text()?;
@@ -73,19 +92,23 @@ async fn execute_action_internal(
     } else {
         match ax::read_selection_only()? {
             Some(r) => r,
-            None => return Err("No text selected".into()),
+            None => {
+                app_log(state, "No text selected");
+                return Err("No text selected".into());
+            }
         }
     };
 
     if read_result.text.trim().is_empty() {
+        app_log(state, "No text selected (empty)");
         return Err("No text selected".into());
     }
 
-    println!("[fennec] Text (selected={}): \"{}...\"", read_result.was_selected, &read_result.text[..read_result.text.len().min(50)]);
+    app_log(state, &format!("Read {} chars (selected={})", read_result.text.len(), read_result.was_selected));
 
     let prompt = build_prompt(&config, &action_id, &read_result.text);
 
-    println!("[fennec] Sending to AI...");
+    app_log(state, "Sending to AI...");
 
     // Start loading animation
     start_loading(app);
@@ -97,14 +120,15 @@ async fn execute_action_internal(
 
     match result {
         Ok(corrected) => {
-            println!("[fennec] Got result: \"{}...\"", &corrected[..corrected.len().min(50)]);
+            app_log(state, &format!("AI result: {} chars", corrected.len()));
             *state.last_original.lock().unwrap() = Some(read_result.text);
             ax::write_text(&corrected, read_result.was_selected)?;
+            app_log(state, "Text written successfully");
             clipboard::play_done_sound();
             Ok(())
         }
         Err(e) => {
-            eprintln!("[fennec] AI error: {}", e);
+            app_log(state, &format!("AI error: {}", e));
             Err(e)
         }
     }
@@ -286,12 +310,17 @@ fn show_action_menu(app: &AppHandle, select_all: bool) {
 
 fn unregister_shortcuts(app: &AppHandle) {
     let _ = app.global_shortcut().unregister_all();
-    println!("[fennec] Unregistered all shortcuts");
+    let state = app.state::<AppState>();
+    app_log(&state, "Unregistered all shortcuts");
 }
 
 fn register_shortcuts(app: &AppHandle) {
-    let config = app.state::<AppState>().config.lock().unwrap().clone();
+    let state_ref = app.state::<AppState>();
+    let config = state_ref.config.lock().unwrap().clone();
     let s = &config.shortcuts;
+
+    app_log(&state_ref, &format!("Registering shortcuts: correct={}, correct_all={}, undo={}, menu={}, menu_all={}",
+        s.correct, s.correct_all, s.undo, s.menu, s.menu_all));
 
     // Correct selected text
     let app_handle = app.clone();
@@ -304,9 +333,9 @@ fn register_shortcuts(app: &AppHandle) {
             let _ = execute_action_internal(&app, &state, "correct".into(), false).await;
         });
     }) {
-        eprintln!("[fennec] Failed to register {}: {}", shortcut, e);
+        app_log(&state_ref, &format!("FAILED to register {}: {}", shortcut, e));
     } else {
-        println!("[fennec] Registered: {}", shortcut);
+        app_log(&state_ref, &format!("Registered: {}", shortcut));
     }
 
     // Correct all text
@@ -320,9 +349,9 @@ fn register_shortcuts(app: &AppHandle) {
             let _ = execute_action_internal(&app, &state, "correct".into(), true).await;
         });
     }) {
-        eprintln!("[fennec] Failed to register {}: {}", shortcut, e);
+        app_log(&state_ref, &format!("FAILED to register {}: {}", shortcut, e));
     } else {
-        println!("[fennec] Registered: {}", shortcut);
+        app_log(&state_ref, &format!("Registered: {}", shortcut));
     }
 
     // Undo
@@ -339,9 +368,9 @@ fn register_shortcuts(app: &AppHandle) {
             }
         });
     }) {
-        eprintln!("[fennec] Failed to register {}: {}", shortcut, e);
+        app_log(&state_ref, &format!("FAILED to register {}: {}", shortcut, e));
     } else {
-        println!("[fennec] Registered: {}", shortcut);
+        app_log(&state_ref, &format!("Registered: {}", shortcut));
     }
 
     // Action menu (on selection)
@@ -351,9 +380,9 @@ fn register_shortcuts(app: &AppHandle) {
         if event.state != ShortcutState::Pressed { return; }
         show_action_menu(&app_handle, false);
     }) {
-        eprintln!("[fennec] Failed to register {}: {}", shortcut, e);
+        app_log(&state_ref, &format!("FAILED to register {}: {}", shortcut, e));
     } else {
-        println!("[fennec] Registered: {}", shortcut);
+        app_log(&state_ref, &format!("Registered: {}", shortcut));
     }
 
     // Action menu (select all)
@@ -363,9 +392,9 @@ fn register_shortcuts(app: &AppHandle) {
         if event.state != ShortcutState::Pressed { return; }
         show_action_menu(&app_handle, true);
     }) {
-        eprintln!("[fennec] Failed to register {}: {}", shortcut, e);
+        app_log(&state_ref, &format!("FAILED to register {}: {}", shortcut, e));
     } else {
-        println!("[fennec] Registered: {}", shortcut);
+        app_log(&state_ref, &format!("Registered: {}", shortcut));
     }
 }
 
@@ -387,9 +416,11 @@ pub fn run() {
             config: Mutex::new(config),
             last_original: Mutex::new(None),
             is_loading: AtomicBool::new(false),
+            logs: Mutex::new(Vec::new()),
         })
         .invoke_handler(tauri::generate_handler![
             get_config,
+            get_logs,
             update_config,
             check_accessibility,
             pause_shortcuts,
