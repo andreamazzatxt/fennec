@@ -72,12 +72,13 @@ async function startRecording(row: HTMLElement, key: string) {
 }
 
 async function stopRecording(resume = true) {
+  const wasRecording = recordingRow !== null;
   if (recordingRow) {
     recordingRow.classList.remove("recording");
   }
   recordingRow = null;
   recordingKey = null;
-  if (resume) {
+  if (resume && wasRecording) {
     await invoke("resume_shortcuts");
   }
 }

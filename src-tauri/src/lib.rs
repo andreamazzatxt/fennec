@@ -60,6 +60,7 @@ fn pause_shortcuts(app: AppHandle) {
 
 #[tauri::command]
 fn resume_shortcuts(app: AppHandle) {
+    unregister_shortcuts(&app);
     register_shortcuts(&app);
 }
 
