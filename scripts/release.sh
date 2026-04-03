@@ -5,7 +5,12 @@ set -euo pipefail
 # Creates signed updater artifacts and uploads to GitHub release
 
 VERSION=$(grep '"version"' src-tauri/tauri.conf.json | head -1 | sed 's/.*: *"\(.*\)".*/\1/')
-BUNDLE_DIR="src-tauri/target/release/bundle"
+# Workspace builds output to root target/, standalone builds to src-tauri/target/
+if [ -d "target/release/bundle" ]; then
+    BUNDLE_DIR="target/release/bundle"
+else
+    BUNDLE_DIR="src-tauri/target/release/bundle"
+fi
 APP_PATH="$BUNDLE_DIR/macos/Fennec.app"
 DMG_PATH="$BUNDLE_DIR/dmg/Fennec_${VERSION}_aarch64.dmg"
 TAR_PATH="$BUNDLE_DIR/macos/Fennec.app.tar.gz"

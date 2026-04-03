@@ -27,7 +27,7 @@ let saveTimeout: ReturnType<typeof setTimeout> | null = null;
 
 function buildConfig(): FennecConfig {
   const tapToggle = $("tapToggle") as HTMLInputElement;
-  const tapSensitivity = $("tapSensitivity") as HTMLSelectElement;
+  const tapSensitivity = document.getElementById("tapSensitivity") as HTMLSelectElement;
   return {
     provider: selectedProvider,
     apiKey: $("rbApiKey").value,
@@ -398,13 +398,9 @@ async function init() {
       tab.classList.add("active");
       $el("panel-" + tab.dataset.tab!).classList.add("active");
 
-      activeTab = tab.dataset.tab!;
-      // Show footer only on connection tab
-      $el("footer").style.display = activeTab === "connection" ? "" : "none";
-
       // Auto-refresh logs when Logs tab is active
       if (logsInterval) { clearInterval(logsInterval); logsInterval = null; }
-      if (activeTab === "logs") {
+      if (tab.dataset.tab === "logs") {
         loadLogs();
         logsInterval = setInterval(loadLogs, 2000);
       }
@@ -535,7 +531,7 @@ async function init() {
 
   // ── General: Double Tap to Polish ──
   const tapToggle = $("tapToggle") as HTMLInputElement;
-  const tapSensitivity = $("tapSensitivity") as HTMLSelectElement;
+  const tapSensitivity = document.getElementById("tapSensitivity") as HTMLSelectElement;
   const tapStatus = $el("tapStatus");
 
   // Only show on Apple Silicon
