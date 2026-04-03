@@ -20,6 +20,8 @@ pub struct CustomAction {
     pub subtitle: String,
     pub prompt: String,
     pub shortcut: Option<String>,
+    #[serde(default)]
+    pub icon: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

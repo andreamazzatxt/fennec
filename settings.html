@@ -498,6 +498,292 @@
         box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--sage);
       }
 
+      /* ── Custom actions (Actions tab) ── */
+      .custom-actions-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.08s both;
+      }
+
+      .custom-action-card {
+        border: 1px solid var(--surface-border);
+        border-radius: 10px;
+        background: var(--surface);
+        overflow: hidden;
+        animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+      }
+
+      .custom-action-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 14px;
+        cursor: pointer;
+        transition: background 0.1s;
+      }
+
+      .custom-action-header:hover {
+        background: var(--hover);
+      }
+
+      .custom-action-label {
+        flex: 1;
+        font-size: 13px;
+        font-weight: 500;
+      }
+
+      .custom-action-shortcut {
+        display: flex;
+        align-items: center;
+        gap: 3px;
+      }
+
+      .btn-delete-action {
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        background: none;
+        color: var(--text-dim);
+        cursor: pointer;
+        border-radius: 6px;
+        transition: color 0.12s, background 0.12s;
+        flex-shrink: 0;
+      }
+
+      .btn-delete-action:hover {
+        color: #b44;
+        background: rgba(180, 68, 68, 0.08);
+      }
+
+      .custom-action-body {
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.25s ease;
+      }
+
+      .custom-action-card.open .custom-action-body {
+        max-height: 400px;
+      }
+
+      .custom-action-fields {
+        padding: 4px 14px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .custom-action-fields label {
+        display: block;
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--text-secondary);
+        margin-bottom: 4px;
+      }
+
+      .custom-action-fields input[type="text"],
+      .custom-action-fields textarea {
+        width: 100%;
+        padding: 8px 10px;
+        border: 1px solid var(--input-border);
+        border-radius: 8px;
+        background: var(--bg);
+        font-family: "Fira Code", monospace;
+        font-size: 12px;
+        color: var(--text);
+        outline: none;
+        transition: border-color 0.15s, box-shadow 0.15s;
+        -webkit-user-select: text;
+        user-select: text;
+      }
+
+      .custom-action-fields textarea {
+        min-height: 60px;
+        resize: vertical;
+        line-height: 1.5;
+      }
+
+      .custom-action-fields input:focus,
+      .custom-action-fields textarea:focus {
+        border-color: var(--input-focus);
+        box-shadow: 0 0 0 3px var(--sage-bg);
+      }
+
+      .custom-action-fields input::placeholder,
+      .custom-action-fields textarea::placeholder {
+        font-family: "Inter", sans-serif;
+        color: var(--text-dim);
+        font-size: 12px;
+      }
+
+      .btn-add-action {
+        width: 100%;
+        padding: 10px;
+        border: 1px dashed var(--input-border);
+        border-radius: 10px;
+        background: none;
+        font-family: "Inter", sans-serif;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-secondary);
+        cursor: pointer;
+        transition: all 0.12s ease;
+        margin-top: 10px;
+        animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.12s both;
+      }
+
+      .btn-add-action:hover {
+        border-color: var(--sage);
+        color: var(--sage);
+        background: var(--sage-bg);
+      }
+
+      .icon-picker-btn {
+        width: 28px;
+        height: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid var(--surface-border);
+        background: var(--bg);
+        border-radius: 6px;
+        font-size: 15px;
+        cursor: pointer;
+        flex-shrink: 0;
+        transition: all 0.12s;
+        line-height: 1;
+      }
+
+      .icon-picker-btn:hover {
+        border-color: var(--sage-border);
+        background: var(--sage-bg);
+      }
+
+      .emoji-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+      }
+
+      .emoji-option {
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid transparent;
+        background: none;
+        border-radius: 6px;
+        font-size: 16px;
+        cursor: pointer;
+        transition: all 0.1s;
+        line-height: 1;
+      }
+
+      .emoji-option:hover {
+        background: var(--hover);
+        border-color: var(--surface-border);
+      }
+
+      .emoji-option.selected {
+        background: var(--sage-bg);
+        border-color: var(--sage-border);
+      }
+
+      .custom-actions-empty {
+        text-align: center;
+        padding: 24px;
+        color: var(--text-dim);
+        font-size: 12px;
+      }
+
+      /* ── Action list (General tab) ── */
+      .action-list {
+        display: flex;
+        flex-direction: column;
+        border: 1px solid var(--surface-border);
+        border-radius: 10px;
+        background: var(--surface);
+        overflow: hidden;
+        animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.08s both;
+      }
+
+      .action-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 14px;
+      }
+
+      .action-row + .action-row {
+        border-top: 1px solid var(--divider);
+      }
+
+      .action-info {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .action-title {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text);
+      }
+
+      .action-subtitle {
+        font-size: 11px;
+        color: var(--text-secondary);
+      }
+
+      .btn-action {
+        padding: 5px 14px;
+        border-radius: 6px;
+        border: 1px solid var(--input-border);
+        font-family: "Inter", sans-serif;
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        background: var(--bg);
+        color: var(--text);
+        transition: all 0.12s ease;
+        outline: none;
+        flex-shrink: 0;
+      }
+
+      .btn-action:hover {
+        background: var(--hover);
+        border-color: var(--text-dim);
+      }
+
+      .btn-action:active {
+        transform: translateY(0.5px);
+      }
+
+      .btn-action:disabled {
+        opacity: 0.5;
+        cursor: default;
+        transform: none;
+      }
+
+      .btn-action-warn {
+        color: #b44;
+        border-color: rgba(180, 68, 68, 0.2);
+      }
+
+      .btn-action-warn:hover {
+        background: rgba(180, 68, 68, 0.05);
+        border-color: rgba(180, 68, 68, 0.3);
+      }
+
+      .btn-action-success {
+        color: var(--sage);
+        border-color: var(--sage-border);
+      }
+
       /* ── Logs ── */
       .log-container {
         font-family: "Fira Code", monospace;
@@ -536,6 +822,8 @@
     <div class="tabs">
       <button class="tab active" data-tab="shortcuts">Shortcuts</button>
       <button class="tab" data-tab="connection">Connection</button>
+      <button class="tab" data-tab="actions">Actions</button>
+      <button class="tab" data-tab="general">General</button>
       <button class="tab" data-tab="logs">Logs</button>
     </div>
 
@@ -645,6 +933,32 @@
             </div>
           </div>
 
+        </div>
+      </div>
+
+      <!-- Actions panel -->
+      <div class="panel" id="panel-actions">
+        <div id="customActionsList" class="custom-actions-list"></div>
+        <button class="btn-add-action" id="addActionBtn">+ Add action</button>
+      </div>
+
+      <!-- General panel -->
+      <div class="panel" id="panel-general">
+        <div class="action-list">
+          <div class="action-row" id="updateRow">
+            <div class="action-info">
+              <span class="action-title">Check for updates</span>
+              <span class="action-subtitle" id="updateStatus">Check if a new version is available</span>
+            </div>
+            <button class="btn-action" id="checkUpdateBtn">Check</button>
+          </div>
+          <div class="action-row" id="resetAxRow">
+            <div class="action-info">
+              <span class="action-title">Reset Accessibility</span>
+              <span class="action-subtitle">Fix shortcuts not working after app update</span>
+            </div>
+            <button class="btn-action btn-action-warn" id="resetAxBtn">Reset</button>
+          </div>
         </div>
       </div>
 

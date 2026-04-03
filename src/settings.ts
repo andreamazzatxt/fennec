@@ -16,7 +16,7 @@ interface FennecConfig {
     undo: string;
   };
   launchAtLogin: boolean;
-  customActions: { id: string; label: string; subtitle: string; prompt: string; shortcut?: string }[];
+  customActions: { id: string; label: string; subtitle: string; prompt: string; shortcut?: string; icon?: string }[];
 }
 
 const $ = (id: string) => document.getElementById(id) as HTMLInputElement;
@@ -62,6 +62,7 @@ function selectProvider(provider: string) {
 // Shortcut recording state
 let recordingRow: HTMLElement | null = null;
 let recordingKey: string | null = null;
+let customActions: { id: string; label: string; subtitle: string; prompt: string; shortcut?: string; icon?: string }[] = [];
 
 async function startRecording(row: HTMLElement, key: string) {
   stopRecording(false);
@@ -147,6 +148,110 @@ function handleShortcutKeydown(e: KeyboardEvent) {
   stopRecording();
 }
 
+function renderCustomActions() {
+  const list = $el("customActionsList");
+  if (customActions.length === 0) {
+    list.innerHTML = '<div class="custom-actions-empty">No custom actions yet</div>';
+    return;
+  }
+  list.innerHTML = customActions.map((a, i) => `
+    <div class="custom-action-card" data-index="${i}">
+      <div class="custom-action-header">
+        <button class="icon-picker-btn" data-icon-index="${i}" title="Pick icon">${a.icon || "\u26A1"}</button>
+        <span class="custom-action-label">${a.label || "Untitled action"}</span>
+        <div class="custom-action-shortcut" id="customShortcut${i}"></div>
+        <button class="btn-delete-action" data-delete="${i}" title="Delete">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+            <path d="M4 4l8 8M12 4l-8 8"/>
+          </svg>
+        </button>
+      </div>
+      <div class="custom-action-body">
+        <div class="custom-action-fields">
+          <div class="field-group">
+            <label>Name</label>
+            <input type="text" data-field="label" data-index="${i}" value="${a.label}" placeholder="e.g. Translate to English" />
+          </div>
+          <div class="field-group">
+            <label>Prompt</label>
+            <textarea data-field="prompt" data-index="${i}" placeholder="e.g. Translate the following text to English">${a.prompt}</textarea>
+          </div>
+          <div class="field-group">
+            <label>Icon</label>
+            <div class="emoji-grid" data-emoji-index="${i}">
+              ${["✨","🔥","🌍","📝","💬","🎯","🧹","📧","💡","🔬","🎨","📊","🚀","❤️","⚡","🤖"].map(e =>
+                `<button class="emoji-option${(a.icon || "⚡") === e ? " selected" : ""}" data-emoji="${e}">${e}</button>`
+              ).join("")}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `).join("");
+
+  // Render shortcut keycaps
+  customActions.forEach((a, i) => {
+    if (a.shortcut) renderKeys(a.shortcut, `customShortcut${i}`);
+  });
+
+  // Toggle expand on header click
+  list.querySelectorAll<HTMLElement>(".custom-action-header").forEach(header => {
+    header.addEventListener("click", (e) => {
+      if ((e.target as HTMLElement).closest(".btn-delete-action")) return;
+      header.closest(".custom-action-card")!.classList.toggle("open");
+    });
+  });
+
+  // Delete buttons
+  list.querySelectorAll<HTMLButtonElement>("[data-delete]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const idx = parseInt(btn.dataset.delete!);
+      customActions.splice(idx, 1);
+      renderCustomActions();
+    });
+  });
+
+  // Field changes
+  list.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("[data-field]").forEach(input => {
+    input.addEventListener("input", () => {
+      const idx = parseInt(input.dataset.index!);
+      const field = input.dataset.field as "label" | "prompt";
+      customActions[idx][field] = input.value;
+      // Update header label live
+      if (field === "label") {
+        const card = input.closest(".custom-action-card")!;
+        card.querySelector(".custom-action-label")!.textContent = input.value || "Untitled action";
+      }
+    });
+  });
+
+  // Emoji selection
+  list.querySelectorAll<HTMLElement>(".emoji-grid").forEach(grid => {
+    grid.addEventListener("click", (e) => {
+      const btn = (e.target as HTMLElement).closest(".emoji-option") as HTMLButtonElement;
+      if (!btn) return;
+      const idx = parseInt(grid.dataset.emojiIndex!);
+      const emoji = btn.dataset.emoji!;
+      customActions[idx].icon = emoji;
+      // Update selected state
+      grid.querySelectorAll(".emoji-option").forEach(b => b.classList.remove("selected"));
+      btn.classList.add("selected");
+      // Update header icon
+      const card = grid.closest(".custom-action-card")!;
+      card.querySelector(".icon-picker-btn")!.textContent = emoji;
+    });
+  });
+
+  // Icon picker button opens card
+  list.querySelectorAll<HTMLButtonElement>(".icon-picker-btn").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      btn.closest(".custom-action-card")!.classList.add("open");
+    });
+  });
+}
+
 async function init() {
   const config = await invoke<FennecConfig>("get_config");
   console.log("[settings] config loaded:", JSON.stringify(config));
@@ -161,6 +266,24 @@ async function init() {
 
   // Store shortcuts
   shortcuts = { ...config.shortcuts };
+
+  // Load custom actions
+  customActions = (config.customActions || []).map(a => ({ ...a }));
+  renderCustomActions();
+
+  $el("addActionBtn").addEventListener("click", () => {
+    const id = "a" + Date.now().toString(36);
+    customActions.push({ id, label: "", subtitle: "", prompt: "" });
+    renderCustomActions();
+    // Open the new card
+    const cards = document.querySelectorAll(".custom-action-card");
+    const last = cards[cards.length - 1];
+    if (last) {
+      last.classList.add("open");
+      const input = last.querySelector("input[data-field='label']") as HTMLInputElement;
+      if (input) input.focus();
+    }
+  });
 
   // Render all keycaps
   for (const key of ["correct", "correctAll", "menu", "menuAll", "undo"]) {
@@ -258,6 +381,67 @@ async function init() {
     }
   });
 
+  // ── General: Check for updates ──
+  $el("checkUpdateBtn").addEventListener("click", async () => {
+    const btn = $el("checkUpdateBtn") as HTMLButtonElement;
+    const status = $el("updateStatus");
+    btn.disabled = true;
+    btn.textContent = "Checking...";
+    status.textContent = "Checking for updates...";
+    try {
+      const version = await invoke<string | null>("check_for_update");
+      if (version) {
+        status.textContent = `Version ${version} available!`;
+        btn.textContent = "Install";
+        btn.classList.add("btn-action-success");
+        btn.disabled = false;
+        btn.onclick = async () => {
+          btn.disabled = true;
+          btn.textContent = "Installing...";
+          status.textContent = "Downloading and installing...";
+          try {
+            await invoke("install_update");
+            status.textContent = "Update installed!";
+            btn.textContent = "Restart";
+            btn.classList.remove("btn-action-success");
+            btn.disabled = false;
+            btn.onclick = () => { invoke("reset_accessibility"); };
+          } catch (e: any) {
+            status.textContent = `Install failed: ${e}`;
+            btn.textContent = "Retry";
+            btn.disabled = false;
+          }
+        };
+      } else {
+        status.textContent = "You're on the latest version";
+        btn.textContent = "Check";
+        btn.disabled = false;
+      }
+    } catch (e: any) {
+      status.textContent = `Error: ${e}`;
+      btn.textContent = "Retry";
+      btn.disabled = false;
+    }
+  });
+
+  // ── General: Reset Accessibility ──
+  $el("resetAxBtn").addEventListener("click", async () => {
+    const btn = $el("resetAxBtn") as HTMLButtonElement;
+    btn.disabled = true;
+    btn.textContent = "Resetting...";
+    try {
+      const msg = await invoke<string>("reset_accessibility");
+      btn.textContent = "Done";
+      const subtitle = document.querySelector("#resetAxRow .action-subtitle") as HTMLElement;
+      subtitle.textContent = msg;
+    } catch (e: any) {
+      btn.textContent = "Failed";
+      const subtitle = document.querySelector("#resetAxRow .action-subtitle") as HTMLElement;
+      subtitle.textContent = `${e}`;
+      btn.disabled = false;
+    }
+  });
+
   // ── Save ──
   $el("saveBtn").addEventListener("click", async () => {
     const updated: FennecConfig = {
@@ -275,10 +459,19 @@ async function init() {
         menuAll: shortcuts.menuAll,
         undo: shortcuts.undo,
       },
+      customActions: customActions.filter(a => a.label && a.prompt),
     };
 
-    await invoke("update_config", { newConfig: updated });
-    getCurrentWindow().close();
+    try {
+      await invoke("update_config", { newConfig: updated });
+      getCurrentWindow().close();
+    } catch (e: any) {
+      console.error("Save failed:", e);
+      const status = $el("status");
+      status.querySelector("svg")!.style.display = "none";
+      status.textContent = `Error: ${e}`;
+      status.classList.add("visible");
+    }
   });
 }
 

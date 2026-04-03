@@ -69,6 +69,55 @@ fn check_accessibility() -> bool {
     ax::check_accessibility()
 }
 
+#[tauri::command]
+fn reset_accessibility(app: AppHandle) -> Result<String, String> {
+    let output = std::process::Command::new("tccutil")
+        .args(["reset", "Accessibility", "ai.fennec.app"])
+        .output()
+        .map_err(|e| format!("Failed to run tccutil: {}", e))?;
+    if output.status.success() {
+        // Restart the app so macOS re-prompts for Accessibility permission
+        app.restart();
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(format!("tccutil failed: {}", stderr))
+    }
+}
+
+#[tauri::command]
+fn restart_app(app: AppHandle) {
+    let _ = app.restart();
+}
+
+#[tauri::command]
+async fn check_for_update(app: AppHandle) -> Result<Option<String>, String> {
+    use tauri_plugin_updater::UpdaterExt;
+    let updater = app.updater().map_err(|e| format!("{}", e))?;
+    match updater.check().await {
+        Ok(Some(update)) => Ok(Some(update.version.clone())),
+        Ok(None) => Ok(None),
+        Err(e) => Err(format!("{}", e)),
+    }
+}
+
+#[tauri::command]
+async fn install_update(app: AppHandle) -> Result<(), String> {
+    use tauri_plugin_updater::UpdaterExt;
+    let updater = app.updater().map_err(|e| format!("{}", e))?;
+    match updater.check().await {
+        Ok(Some(update)) => {
+            let mut bytes = Vec::new();
+            update.download_and_install(
+                |chunk_len, _content_len| { bytes.extend(std::iter::repeat(0u8).take(chunk_len)); },
+                || {},
+            ).await.map_err(|e| format!("{}", e))?;
+            Ok(())
+        }
+        Ok(None) => Err("No update available".into()),
+        Err(e) => Err(format!("{}", e)),
+    }
+}
+
 async fn execute_action_internal(
     app: &AppHandle,
     state: &AppState,
@@ -88,14 +137,26 @@ async fn execute_action_internal(
     app_log(state, &format!("Action: {} (select_all: {})", action_id, select_all));
 
     let read_result = if select_all {
-        let text = ax::select_all_text()?;
-        ax::ReadResult { text, was_selected: false }
+        match ax::select_all_text() {
+            Ok(text) => {
+                app_log(state, &format!("select_all_text OK: {} chars", text.len()));
+                ax::ReadResult { text, was_selected: false }
+            }
+            Err(e) => {
+                app_log(state, &format!("select_all_text FAILED: {}", e));
+                return Err(e);
+            }
+        }
     } else {
-        match ax::read_selection_only()? {
-            Some(r) => r,
-            None => {
+        match ax::read_selection_only() {
+            Ok(Some(r)) => r,
+            Ok(None) => {
                 app_log(state, "No text selected");
                 return Err("No text selected".into());
+            }
+            Err(e) => {
+                app_log(state, &format!("read_selection_only FAILED: {}", e));
+                return Err(e);
             }
         }
     };
@@ -123,10 +184,17 @@ async fn execute_action_internal(
         Ok(corrected) => {
             app_log(state, &format!("AI result: {} chars", corrected.len()));
             *state.last_original.lock().unwrap() = Some(read_result.text);
-            ax::write_text(&corrected, read_result.was_selected)?;
-            app_log(state, "Text written successfully");
-            clipboard::play_done_sound();
-            Ok(())
+            match ax::write_text(&corrected, read_result.was_selected) {
+                Ok(()) => {
+                    app_log(state, "Text written successfully");
+                    clipboard::play_done_sound();
+                    Ok(())
+                }
+                Err(e) => {
+                    app_log(state, &format!("write_text FAILED: {}", e));
+                    Err(e)
+                }
+            }
         }
         Err(e) => {
             app_log(state, &format!("AI error: {}", e));
@@ -205,9 +273,10 @@ fn start_loading(app: &AppHandle) {
             i += 1;
             std::thread::sleep(std::time::Duration::from_millis(300));
         }
-        // Restore original icon
+        // Restore original icon (dev uses red icon)
+        let icon_name = if cfg!(debug_assertions) { "icons/tray_dev.png" } else { "icons/tray_color.png" };
         let icon_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("icons/tray_color.png");
+            .join(icon_name);
         if let Ok(img) = Image::from_path(&icon_path) {
             let app_main = app_clone.clone();
             let _ = app_clone.run_on_main_thread(move || {
@@ -254,6 +323,7 @@ fn build_prompt(config: &FennecConfig, action_id: &str, text: &str) -> String {
 
 fn show_action_menu(app: &AppHandle, select_all: bool) {
     let app_clone = app.clone();
+    let config = app.state::<AppState>().config.lock().unwrap().clone();
     let _ = app.run_on_main_thread(move || {
         use objc2::MainThreadMarker;
         use objc2_app_kit::{NSMenu, NSMenuItem, NSEvent};
@@ -264,13 +334,25 @@ fn show_action_menu(app: &AppHandle, select_all: bool) {
         let menu = NSMenu::new(mtm);
         menu.setAutoenablesItems(false);
 
-        let titles = ["Smooth it out", "More formal", "More casual", "Make it shorter"];
+        // Built-in actions: (label, action_id)
+        let mut actions: Vec<(String, String)> = vec![
+            ("\u{2728} Smooth it out".into(), "correct".into()),
+            ("\u{1F454} More formal".into(), "formal".into()),
+            ("\u{1F60E} More casual".into(), "informal".into()),
+            ("\u{2702}\u{FE0F} Make it shorter".into(), "concise".into()),
+        ];
 
-        for title in &titles {
+        // Add custom actions
+        for ca in &config.custom_actions {
+            let icon = ca.icon.as_deref().unwrap_or("\u{26A1}");
+            actions.push((format!("{} {}", icon, ca.label), format!("custom_{}", ca.id)));
+        }
+
+        for (label, _) in &actions {
             let item = unsafe {
                 NSMenuItem::initWithTitle_action_keyEquivalent(
                     mtm.alloc(),
-                    &NSString::from_str(title),
+                    &NSString::from_str(label),
                     None,
                     &NSString::from_str(""),
                 )
@@ -290,20 +372,17 @@ fn show_action_menu(app: &AppHandle, select_all: bool) {
         if picked {
             if let Some(selected) = menu.highlightedItem() {
                 let title = selected.title().to_string();
-                let action_id = match title.as_str() {
-                    "Smooth it out" => "correct",
-                    "More formal" => "formal",
-                    "More casual" => "informal",
-                    "Make it shorter" => "concise",
-                    _ => return,
-                };
+                let action_id = actions.iter()
+                    .find(|(label, _)| *label == title)
+                    .map(|(_, id)| id.clone());
 
-                let app_h = app_clone.clone();
-                let action = action_id.to_string();
-                tauri::async_runtime::spawn(async move {
-                    let state = app_h.state::<AppState>();
-                    let _ = execute_action_internal(&app_h, &state, action, select_all).await;
-                });
+                if let Some(action) = action_id {
+                    let app_h = app_clone.clone();
+                    tauri::async_runtime::spawn(async move {
+                        let state = app_h.state::<AppState>();
+                        let _ = execute_action_internal(&app_h, &state, action, select_all).await;
+                    });
+                }
             }
         }
     });
@@ -446,6 +525,10 @@ pub fn run() {
             get_logs,
             update_config,
             check_accessibility,
+            reset_accessibility,
+            restart_app,
+            check_for_update,
+            install_update,
             pause_shortcuts,
             resume_shortcuts,
             execute_action,
@@ -461,6 +544,17 @@ pub fn run() {
                 let mtm = unsafe { MainThreadMarker::new_unchecked() };
                 let ns_app = NSApplication::sharedApplication(mtm);
                 ns_app.setActivationPolicy(NSApplicationActivationPolicy::Accessory);
+            }
+
+            // In dev mode, use a red tray icon to distinguish from production
+            if cfg!(debug_assertions) {
+                let dev_icon_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("icons/tray_dev.png");
+                if let Ok(img) = Image::from_path(&dev_icon_path) {
+                    if let Some(tray) = app.tray_by_id("fennec-tray") {
+                        let _ = tray.set_icon(Some(img));
+                    }
+                }
             }
 
             // Check accessibility on startup

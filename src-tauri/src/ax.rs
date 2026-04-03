@@ -9,22 +9,52 @@ pub fn check_accessibility() -> bool {
 }
 
 /// Get the currently focused UI element
-unsafe fn get_focused_element() -> Option<AXUIElementRef> {
+unsafe fn get_focused_element() -> Result<AXUIElementRef, String> {
     let system = AXUIElementCreateSystemWide();
-    let mut focused: CFTypeRef = ptr::null_mut();
+    let mut focused_app: CFTypeRef = ptr::null_mut();
 
-    let attr = CFString::new("AXFocusedUIElement");
-    let err = AXUIElementCopyAttributeValue(
+    // First get the focused application
+    let app_attr = CFString::new("AXFocusedApplication");
+    let app_err = AXUIElementCopyAttributeValue(
         system,
-        attr.as_concrete_TypeRef(),
+        app_attr.as_concrete_TypeRef(),
+        &mut focused_app,
+    );
+
+    if app_err != kAXErrorSuccess as i32 || focused_app.is_null() {
+        return Err(format!(
+            "No focused application (AXError: {}). Check Accessibility permissions in System Settings > Privacy & Security > Accessibility.",
+            app_err
+        ));
+    }
+
+    // Then get the focused UI element from that application
+    let elem_attr = CFString::new("AXFocusedUIElement");
+    let mut focused: CFTypeRef = ptr::null_mut();
+    let err = AXUIElementCopyAttributeValue(
+        focused_app as AXUIElementRef,
+        elem_attr.as_concrete_TypeRef(),
         &mut focused,
     );
 
     if err == kAXErrorSuccess as i32 && !focused.is_null() {
-        Some(focused as AXUIElementRef)
+        Ok(focused as AXUIElementRef)
     } else {
-        println!("[fennec] AX: Failed to get focused element (err: {})", err);
-        None
+        // Also try system-wide as fallback
+        let mut focused2: CFTypeRef = ptr::null_mut();
+        let err2 = AXUIElementCopyAttributeValue(
+            system,
+            elem_attr.as_concrete_TypeRef(),
+            &mut focused2,
+        );
+        if err2 == kAXErrorSuccess as i32 && !focused2.is_null() {
+            Ok(focused2 as AXUIElementRef)
+        } else {
+            Err(format!(
+                "No focused element (app AXError: {}, system AXError: {})",
+                err, err2
+            ))
+        }
     }
 }
 
@@ -37,8 +67,7 @@ pub struct ReadResult {
 /// Read only the selected text. Returns None if nothing is selected.
 pub fn read_selection_only() -> Result<Option<ReadResult>, String> {
     unsafe {
-        let element = get_focused_element()
-            .ok_or("No focused element found")?;
+        let element = get_focused_element()?;
 
         let selected_attr = CFString::new("AXSelectedText");
         let mut value: CFTypeRef = ptr::null_mut();
@@ -66,7 +95,7 @@ pub fn read_selection_only() -> Result<Option<ReadResult>, String> {
 /// Replace text. Tries AX write first, verifies it worked, falls back to clipboard.
 pub fn write_text(new_text: &str, was_selected: bool) -> Result<(), String> {
     unsafe {
-        if let Some(element) = get_focused_element() {
+        if let Ok(element) = get_focused_element() {
             let cf_text = CFString::new(new_text);
             let selected_attr = CFString::new("AXSelectedText");
 
@@ -149,8 +178,7 @@ pub fn write_text(new_text: &str, was_selected: bool) -> Result<(), String> {
 #[allow(dead_code)]
 fn write_selected_text_ax(new_text: &str) -> Result<(), String> {
     unsafe {
-        let element = get_focused_element()
-            .ok_or("No focused element found")?;
+        let element = get_focused_element()?;
 
         let cf_text = CFString::new(new_text);
 
@@ -280,8 +308,7 @@ fn clipboard_fallback_write(text: &str) -> Result<(), String> {
 /// Read all text from the focused element (for select-all operations)
 pub fn select_all_text() -> Result<String, String> {
     unsafe {
-        let element = get_focused_element()
-            .ok_or("No focused element found")?;
+        let element = get_focused_element()?;
 
         let value_attr = CFString::new("AXValue");
         let mut value: CFTypeRef = ptr::null_mut();
