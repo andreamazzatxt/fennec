@@ -498,6 +498,18 @@
         box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--sage);
       }
 
+      .btn-save:disabled {
+        opacity: 0.4;
+        cursor: default;
+        transform: none;
+        box-shadow: none;
+      }
+
+      .section-save {
+        margin-top: 10px;
+        align-self: flex-end;
+      }
+
       /* ── Custom actions (Actions tab) ── */
       .custom-actions-list {
         display: flex;
@@ -784,6 +796,53 @@
         border-color: var(--sage-border);
       }
 
+      /* ── Toggle switch ── */
+      .toggle-switch {
+        position: relative;
+        width: 38px;
+        height: 22px;
+        flex-shrink: 0;
+      }
+      .toggle-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+      .toggle-slider {
+        position: absolute;
+        inset: 0;
+        background: var(--text-dim);
+        border-radius: 11px;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      .toggle-slider::before {
+        content: "";
+        position: absolute;
+        width: 18px; height: 18px;
+        left: 2px; bottom: 2px;
+        background: white;
+        border-radius: 50%;
+        transition: transform 0.2s;
+      }
+      .toggle-switch input:checked + .toggle-slider {
+        background: var(--sage);
+      }
+      .toggle-switch input:checked + .toggle-slider::before {
+        transform: translateX(16px);
+      }
+
+      .tap-select {
+        padding: 4px 8px;
+        border: 1px solid var(--input-border);
+        border-radius: 6px;
+        background: var(--bg);
+        font-family: "Inter", sans-serif;
+        font-size: 12px;
+        color: var(--text);
+        outline: none;
+        flex-shrink: 0;
+      }
+      .tap-select:focus {
+        border-color: var(--input-focus);
+      }
+
       /* ── Logs ── */
       .log-container {
         font-family: "Fira Code", monospace;
@@ -897,6 +956,7 @@
                   <label for="rbModel">Model</label>
                   <input type="text" id="rbModel" placeholder="Model name" />
                 </div>
+                <button class="btn-save section-save" id="saveRb" disabled>Save</button>
               </div>
             </div>
           </div>
@@ -929,6 +989,7 @@
                   <label for="oaiModel">Model</label>
                   <input type="text" id="oaiModel" placeholder="e.g. gpt-4o" />
                 </div>
+                <button class="btn-save section-save" id="saveOai" disabled>Save</button>
               </div>
             </div>
           </div>
@@ -960,6 +1021,45 @@
             <button class="btn-action btn-action-warn" id="resetAxBtn">Reset</button>
           </div>
         </div>
+
+        <!-- Slap to Polish -->
+        <div class="action-list" id="tapSection" style="margin-top: 12px; display: none;">
+          <div class="action-row">
+            <div class="action-info">
+              <span class="action-title">Slap to Polish</span>
+              <span class="action-subtitle" id="tapStatus">Slap the MacBook to correct all text</span>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="tapToggle" />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="action-row" id="tapSensitivityRow" style="display: none;">
+            <div class="action-info">
+              <span class="action-title">Sensitivity</span>
+              <span class="action-subtitle">How hard you need to tap</span>
+            </div>
+            <select id="tapSensitivity" class="tap-select">
+              <option value="low">Low</option>
+              <option value="medium" selected>Medium</option>
+              <option value="high">High</option>
+            </select>
+          </div>
+          <div class="action-row" id="tapHelperRow" style="display: none;">
+            <div class="action-info">
+              <span class="action-title">Helper Status</span>
+              <span class="action-subtitle" id="tapHelperStatus">Checking...</span>
+            </div>
+            <button class="btn-action" id="tapReinstallBtn" style="display: none;">Reinstall</button>
+          </div>
+          <div class="action-row" id="tapTestRow" style="display: none;">
+            <div class="action-info">
+              <span class="action-title">Test</span>
+              <span class="action-subtitle" id="tapTestStatus">Slap the MacBook to verify</span>
+            </div>
+            <button class="btn-action btn-action-success" id="tapTestBtn">Test</button>
+          </div>
+        </div>
       </div>
 
       <!-- Logs panel -->
@@ -969,15 +1069,5 @@
 
     </div>
 
-    <!-- Footer -->
-    <div class="footer">
-      <div class="saved-badge" id="status">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="3.5 8.5 6.5 11.5 12.5 4.5"/>
-        </svg>
-        Saved
-      </div>
-      <button class="btn-save" id="saveBtn">Save</button>
-    </div>
   </body>
 </html>

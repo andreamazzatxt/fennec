@@ -25,6 +25,12 @@ pub struct CustomAction {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TapConfig {
+    pub enabled: bool,
+    pub sensitivity: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FennecConfig {
     #[serde(default = "default_provider")]
     pub provider: String,
@@ -41,6 +47,8 @@ pub struct FennecConfig {
     pub launch_at_login: bool,
     #[serde(rename = "customActions", default)]
     pub custom_actions: Vec<CustomAction>,
+    #[serde(rename = "tapToPolish", default)]
+    pub tap_to_polish: Option<TapConfig>,
 }
 
 impl Default for ShortcutConfig {
@@ -71,6 +79,7 @@ impl Default for FennecConfig {
             shortcuts: ShortcutConfig::default(),
             launch_at_login: false,
             custom_actions: vec![],
+            tap_to_polish: None,
         }
     }
 }

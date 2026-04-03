@@ -34,6 +34,8 @@ No windows to manage. No copy-pasting into a chat. Just better text, right where
 - **Undo** — Restore the original text if you don't like the result
 - **Auto-detect language** — Works in any language, responds in the same language
 - **Accessibility API** — Uses AX APIs for direct text read/write, clipboard fallback for web apps
+- **Slap to Polish** — Slap the MacBook chassis to correct all text (Apple Silicon, opt-in, requires admin)
+- **Animated tray icon** — Fennec's ears wiggle while processing
 - **Sound feedback** — A subtle sound when the AI finishes
 - **Auto-update** — Check for updates and install from within the app
 - **Launch at login** — Toggle from the tray menu
@@ -84,7 +86,7 @@ On first launch, configure your AI provider:
 2. Go to the **Connection** tab
 3. Open the **AI Gateway** accordion (Radical Bit)
 4. Enter your **API Key**, **Endpoint**, and **Model**
-5. Click **Save**
+5. Click **Save** inside the provider section
 
 Config is stored locally in `~/.fennec.json`. Your API key never leaves your machine except to call the AI endpoint.
 
@@ -125,7 +127,7 @@ Create your own actions in **Settings > Actions**:
 | **Shortcuts** | Customize all keyboard shortcuts |
 | **Connection** | Configure AI provider (AI Gateway or OpenAI) |
 | **Actions** | Create and manage custom actions |
-| **General** | Check for updates, reset accessibility permissions |
+| **General** | Slap to Polish (opt-in), check for updates, reset accessibility |
 | **Logs** | Real-time debug logs |
 
 ## Tray menu
@@ -163,4 +165,14 @@ In dev mode, the tray icon is red to distinguish it from the production app.
 4. Writes the improved text back via AX APIs (or clipboard + paste as fallback for web apps)
 
 The app requires Accessibility permissions to read and write text in other apps.
+
+### Slap to Polish
+
+An optional feature that lets you physically slap the MacBook chassis to trigger "correct all" on the currently focused text field. Uses the Apple Silicon accelerometer via a privileged helper daemon.
+
+- **Apple Silicon only** (M1/M2/M3/M4)
+- Enable in **Settings > General > Slap to Polish**
+- Requires admin password (one-time) to install the accelerometer helper
+- Sensitivity levels: Low (strong slaps only), Medium, High
+- The helper runs as a launchd daemon and persists across reboots
 

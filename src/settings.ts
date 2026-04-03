@@ -17,10 +17,72 @@ interface FennecConfig {
   };
   launchAtLogin: boolean;
   customActions: { id: string; label: string; subtitle: string; prompt: string; shortcut?: string; icon?: string }[];
+  tapToPolish?: { enabled: boolean; sensitivity: string };
 }
 
 const $ = (id: string) => document.getElementById(id) as HTMLInputElement;
 const $el = (id: string) => document.getElementById(id) as HTMLElement;
+
+let saveTimeout: ReturnType<typeof setTimeout> | null = null;
+
+function buildConfig(): FennecConfig {
+  const tapToggle = $("tapToggle") as HTMLInputElement;
+  const tapSensitivity = $("tapSensitivity") as HTMLSelectElement;
+  return {
+    provider: selectedProvider,
+    apiKey: $("rbApiKey").value,
+    endpoint: $("rbEndpoint").value,
+    model: $("rbModel").value,
+    openaiApiKey: $("oaiApiKey").value,
+    openaiModel: $("oaiModel").value,
+    shortcuts: {
+      correct: shortcuts.correct,
+      correctAll: shortcuts.correctAll,
+      menu: shortcuts.menu,
+      menuAll: shortcuts.menuAll,
+      undo: shortcuts.undo,
+    },
+    launchAtLogin: false,
+    customActions: customActions.filter(a => a.label && a.prompt),
+    tapToPolish: tapToggle.checked
+      ? { enabled: true, sensitivity: tapSensitivity.value }
+      : undefined,
+  };
+}
+
+async function saveNow() {
+  await invoke("update_config", { newConfig: buildConfig() });
+}
+
+function autoSave() {
+  if (saveTimeout) clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(async () => {
+    try { await saveNow(); } catch (e) { console.error("Auto-save failed:", e); }
+  }, 500);
+}
+
+function markActionCardDirty(idx: number) {
+  const btn = document.querySelector(`[data-save-index="${idx}"]`) as HTMLButtonElement;
+  if (btn) btn.disabled = false;
+}
+
+function wireSectionSave(btnId: string, inputIds: string[]) {
+  const btn = document.getElementById(btnId) as HTMLButtonElement;
+  if (!btn) return;
+  for (const id of inputIds) {
+    $(id).addEventListener("input", () => { btn.disabled = false; });
+  }
+  btn.addEventListener("click", async () => {
+    try {
+      await saveNow();
+      btn.disabled = true;
+      btn.textContent = "Saved";
+      setTimeout(() => { btn.textContent = "Save"; }, 1500);
+    } catch (e: any) {
+      console.error("Save failed:", e);
+    }
+  });
+}
 
 // Tauri token → macOS symbol
 const KEY_SYMBOLS: Record<string, string> = {
@@ -52,11 +114,18 @@ function renderKeys(raw: string, containerId: string) {
 let shortcuts: Record<string, string> = {};
 let selectedProvider = "radicalbit";
 
-function selectProvider(provider: string) {
+function selectProvider(provider: string, save = true) {
   selectedProvider = provider;
   document.querySelectorAll<HTMLElement>(".provider-list .accordion").forEach((acc) => {
     acc.classList.toggle("selected", acc.dataset.provider === provider);
   });
+  if (save) {
+    // Mark both connection save buttons as dirty since provider changed
+    const rbBtn = document.getElementById("saveRb") as HTMLButtonElement;
+    const oaiBtn = document.getElementById("saveOai") as HTMLButtonElement;
+    if (rbBtn) rbBtn.disabled = false;
+    if (oaiBtn) oaiBtn.disabled = false;
+  }
 }
 
 // Shortcut recording state
@@ -146,6 +215,7 @@ function handleShortcutKeydown(e: KeyboardEvent) {
   shortcuts[recordingKey] = newShortcut;
   renderKeys(newShortcut, recordingKey + "Keys");
   stopRecording();
+  autoSave();
 }
 
 function renderCustomActions() {
@@ -184,6 +254,7 @@ function renderCustomActions() {
               ).join("")}
             </div>
           </div>
+          <button class="btn-save section-save action-save" data-save-index="${i}" disabled>Save</button>
         </div>
       </div>
     </div>
@@ -209,6 +280,7 @@ function renderCustomActions() {
       const idx = parseInt(btn.dataset.delete!);
       customActions.splice(idx, 1);
       renderCustomActions();
+      autoSave();
     });
   });
 
@@ -223,6 +295,7 @@ function renderCustomActions() {
         const card = input.closest(".custom-action-card")!;
         card.querySelector(".custom-action-label")!.textContent = input.value || "Untitled action";
       }
+      markActionCardDirty(idx);
     });
   });
 
@@ -240,6 +313,20 @@ function renderCustomActions() {
       // Update header icon
       const card = grid.closest(".custom-action-card")!;
       card.querySelector(".icon-picker-btn")!.textContent = emoji;
+      markActionCardDirty(idx);
+    });
+  });
+
+  // Per-action save buttons
+  list.querySelectorAll<HTMLButtonElement>(".action-save").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      try {
+        await saveNow();
+        btn.disabled = true;
+        btn.textContent = "Saved";
+        setTimeout(() => { btn.textContent = "Save"; }, 1500);
+      } catch (err) { console.error("Save failed:", err); }
     });
   });
 
@@ -262,7 +349,7 @@ async function init() {
   $("rbModel").value = config.model;
   $("oaiApiKey").value = config.openaiApiKey || "";
   $("oaiModel").value = config.openaiModel || "";
-  selectProvider(config.provider || "radicalbit");
+  selectProvider(config.provider || "radicalbit", false);
 
   // Store shortcuts
   shortcuts = { ...config.shortcuts };
@@ -311,9 +398,13 @@ async function init() {
       tab.classList.add("active");
       $el("panel-" + tab.dataset.tab!).classList.add("active");
 
+      activeTab = tab.dataset.tab!;
+      // Show footer only on connection tab
+      $el("footer").style.display = activeTab === "connection" ? "" : "none";
+
       // Auto-refresh logs when Logs tab is active
       if (logsInterval) { clearInterval(logsInterval); logsInterval = null; }
-      if (tab.dataset.tab === "logs") {
+      if (activeTab === "logs") {
         loadLogs();
         logsInterval = setInterval(loadLogs, 2000);
       }
@@ -442,37 +533,99 @@ async function init() {
     }
   });
 
-  // ── Save ──
-  $el("saveBtn").addEventListener("click", async () => {
-    const updated: FennecConfig = {
-      ...config,
-      provider: selectedProvider,
-      apiKey: $("rbApiKey").value,
-      endpoint: $("rbEndpoint").value,
-      model: $("rbModel").value,
-      openaiApiKey: $("oaiApiKey").value,
-      openaiModel: $("oaiModel").value,
-      shortcuts: {
-        correct: shortcuts.correct,
-        correctAll: shortcuts.correctAll,
-        menu: shortcuts.menu,
-        menuAll: shortcuts.menuAll,
-        undo: shortcuts.undo,
-      },
-      customActions: customActions.filter(a => a.label && a.prompt),
-    };
+  // ── General: Double Tap to Polish ──
+  const tapToggle = $("tapToggle") as HTMLInputElement;
+  const tapSensitivity = $("tapSensitivity") as HTMLSelectElement;
+  const tapStatus = $el("tapStatus");
 
-    try {
-      await invoke("update_config", { newConfig: updated });
-      getCurrentWindow().close();
-    } catch (e: any) {
-      console.error("Save failed:", e);
-      const status = $el("status");
-      status.querySelector("svg")!.style.display = "none";
-      status.textContent = `Error: ${e}`;
-      status.classList.add("visible");
+  // Only show on Apple Silicon
+  try {
+    const isAppleSilicon = await invoke<boolean>("check_tap_hardware");
+    if (isAppleSilicon) {
+      $el("tapSection").style.display = "";
+
+      if (config.tapToPolish?.enabled) {
+        tapToggle.checked = true;
+        $el("tapSensitivityRow").style.display = "flex";
+        $el("tapHelperRow").style.display = "flex";
+        $el("tapTestRow").style.display = "flex";
+        tapSensitivity.value = config.tapToPolish.sensitivity || "medium";
+
+        const running = await invoke<boolean>("check_tap_helper_status");
+        $el("tapHelperStatus").textContent = running ? "Running" : "Not running";
+        if (!running) {
+          ($el("tapReinstallBtn") as HTMLElement).style.display = "";
+        }
+      }
+    }
+  } catch {}
+
+  tapToggle.addEventListener("change", async () => {
+    if (tapToggle.checked) {
+      tapStatus.textContent = "Installing helper (admin password required)...";
+      $el("tapSensitivityRow").style.display = "flex";
+      try {
+        await invoke("install_tap_helper", { sensitivity: tapSensitivity.value });
+        tapStatus.textContent = "Slap the MacBook to correct all text";
+        $el("tapHelperRow").style.display = "flex";
+        $el("tapTestRow").style.display = "flex";
+        $el("tapHelperStatus").textContent = "Running";
+      } catch (e: any) {
+        tapToggle.checked = false;
+        $el("tapSensitivityRow").style.display = "none";
+        tapStatus.textContent = String(e).includes("User canceled")
+          ? "Slap the MacBook to correct all text"
+          : `Install failed: ${e}`;
+      }
+    } else {
+      try {
+        await invoke("uninstall_tap_helper");
+      } catch {}
+      $el("tapSensitivityRow").style.display = "none";
+      $el("tapHelperRow").style.display = "none";
+      $el("tapTestRow").style.display = "none";
+      tapStatus.textContent = "Slap the MacBook to correct all text";
     }
   });
+
+  $el("tapTestBtn").addEventListener("click", async () => {
+    const btn = $el("tapTestBtn") as HTMLButtonElement;
+    const status = $el("tapTestStatus");
+    btn.disabled = true;
+    btn.textContent = "Listening...";
+    status.textContent = "Slap the MacBook now...";
+    try {
+      const msg = await invoke<string>("test_tap_helper");
+      status.textContent = msg;
+      btn.textContent = "Test";
+    } catch (e: any) {
+      status.textContent = String(e);
+      btn.textContent = "Retry";
+    }
+    btn.disabled = false;
+  });
+
+  $el("tapReinstallBtn").addEventListener("click", async () => {
+    const btn = $el("tapReinstallBtn") as HTMLButtonElement;
+    btn.disabled = true;
+    btn.textContent = "Installing...";
+    try {
+      await invoke("install_tap_helper", { sensitivity: tapSensitivity.value });
+      $el("tapHelperStatus").textContent = "Running";
+      btn.style.display = "none";
+    } catch (e: any) {
+      $el("tapHelperStatus").textContent = `Failed: ${e}`;
+    }
+    btn.disabled = false;
+    btn.textContent = "Reinstall";
+  });
+
+  // ── Connection: explicit Save per provider ──
+  wireSectionSave("saveRb", ["rbApiKey", "rbEndpoint", "rbModel"]);
+  wireSectionSave("saveOai", ["oaiApiKey", "oaiModel"]);
+
+  // ── Other fields: auto-save ──
+  tapSensitivity.addEventListener("change", autoSave);
 }
 
 init();

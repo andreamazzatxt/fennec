@@ -2,10 +2,11 @@ mod ai;
 mod ax;
 mod clipboard;
 mod config;
+mod tap_listener;
 
 use config::{FennecConfig, load_config, save_config};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use tauri::image::Image;
 use tauri::{
     AppHandle, Manager, WebviewUrl, WebviewWindowBuilder,
@@ -19,6 +20,7 @@ struct AppState {
     last_original: Mutex<Option<String>>,
     is_loading: AtomicBool,
     logs: Mutex<Vec<String>>,
+    tap_listener_running: Arc<AtomicBool>,
 }
 
 fn app_log(state: &AppState, msg: &str) {
@@ -116,6 +118,159 @@ async fn install_update(app: AppHandle) -> Result<(), String> {
         Ok(None) => Err("No update available".into()),
         Err(e) => Err(format!("{}", e)),
     }
+}
+
+#[tauri::command]
+async fn install_tap_helper(app: AppHandle, sensitivity: String) -> Result<(), String> {
+    // In dev mode, use the workspace build; in production, use the bundled resource
+    let resource_path = if cfg!(debug_assertions) {
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .join("target/release/fennec-tap")
+    } else {
+        app.path()
+            .resource_dir()
+            .map_err(|e| format!("Resource dir: {}", e))?
+            .join("fennec-tap")
+    };
+
+    if !resource_path.exists() {
+        return Err(format!(
+            "Helper binary not found at {}. Run: cargo build -p fennec-tap --release",
+            resource_path.display()
+        ));
+    }
+
+    // Write plist to a temp file (no privileges needed)
+    let plist = format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key><string>ai.fennec.tap</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/fennec-tap</string>
+        <string>--sensitivity</string>
+        <string>{}</string>
+    </array>
+    <key>RunAtLoad</key><true/>
+    <key>StandardErrorPath</key><string>/tmp/fennec-tap.log</string>
+    <key>StandardOutPath</key><string>/tmp/fennec-tap.log</string>
+</dict>
+</plist>"#,
+        sensitivity
+    );
+
+    let tmp_plist = std::env::temp_dir().join("ai.fennec.tap.plist");
+    std::fs::write(&tmp_plist, &plist).map_err(|e| format!("Write plist: {}", e))?;
+
+    let script = format!(
+        "cp '{}' /usr/local/bin/fennec-tap && \
+         chmod 755 /usr/local/bin/fennec-tap && \
+         codesign --force --sign - /usr/local/bin/fennec-tap && \
+         mv '{}' /Library/LaunchDaemons/ai.fennec.tap.plist && \
+         chown root:wheel /Library/LaunchDaemons/ai.fennec.tap.plist && \
+         chmod 644 /Library/LaunchDaemons/ai.fennec.tap.plist && \
+         launchctl unload /Library/LaunchDaemons/ai.fennec.tap.plist 2>/dev/null; \
+         launchctl load /Library/LaunchDaemons/ai.fennec.tap.plist",
+        resource_path.display(),
+        tmp_plist.display()
+    );
+
+    let output = std::process::Command::new("osascript")
+        .arg("-e")
+        .arg(format!(
+            "do shell script \"{}\" with administrator privileges",
+            script.replace('\\', "\\\\").replace('"', "\\\"")
+        ))
+        .output()
+        .map_err(|e| format!("Failed to run osascript: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("Install failed: {}", stderr));
+    }
+
+    // Start the tap listener in the main app
+    let state = app.state::<AppState>();
+    let running = state.tap_listener_running.clone();
+    if !running.load(Ordering::Relaxed) {
+        running.store(true, Ordering::Relaxed);
+        tap_listener::start(app.clone(), running);
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn uninstall_tap_helper(app: AppHandle) -> Result<(), String> {
+    // Stop the listener first
+    let state = app.state::<AppState>();
+    state.tap_listener_running.store(false, Ordering::Relaxed);
+
+    let script = "launchctl unload /Library/LaunchDaemons/ai.fennec.tap.plist 2>/dev/null; \
+                  rm -f /Library/LaunchDaemons/ai.fennec.tap.plist; \
+                  rm -f /usr/local/bin/fennec-tap; \
+                  rm -f /tmp/fennec-tap.sock";
+
+    let output = std::process::Command::new("osascript")
+        .arg("-e")
+        .arg(format!(
+            "do shell script \"{}\" with administrator privileges",
+            script
+        ))
+        .output()
+        .map_err(|e| format!("Failed to run osascript: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("Uninstall failed: {}", stderr));
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+fn check_tap_helper_status() -> bool {
+    std::os::unix::net::UnixStream::connect("/tmp/fennec-tap.sock").is_ok()
+}
+
+#[tauri::command]
+async fn test_tap_helper() -> Result<String, String> {
+    use std::io::BufRead;
+
+    let stream = std::os::unix::net::UnixStream::connect("/tmp/fennec-tap.sock")
+        .map_err(|e| format!("Cannot connect to helper: {}", e))?;
+    stream
+        .set_read_timeout(Some(std::time::Duration::from_secs(15)))
+        .map_err(|e| e.to_string())?;
+
+    let reader = std::io::BufReader::new(stream);
+    for line in reader.lines() {
+        match line {
+            Ok(msg) if msg.trim() == "TAP" => return Ok("Slap detected!".into()),
+            Ok(_) => continue,
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock
+                || e.kind() == std::io::ErrorKind::TimedOut =>
+            {
+                return Err("Timeout — no double tap detected in 15s".into());
+            }
+            Err(e) => return Err(format!("Read error: {}", e)),
+        }
+    }
+    Err("Connection closed without detecting a tap".into())
+}
+
+#[tauri::command]
+fn check_tap_hardware() -> bool {
+    std::process::Command::new("sysctl")
+        .args(["-n", "hw.optional.arm64"])
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim() == "1")
+        .unwrap_or(false)
 }
 
 async fn execute_action_internal(
@@ -519,6 +674,7 @@ pub fn run() {
             last_original: Mutex::new(None),
             is_loading: AtomicBool::new(false),
             logs: Mutex::new(Vec::new()),
+            tap_listener_running: Arc::new(AtomicBool::new(false)),
         })
         .invoke_handler(tauri::generate_handler![
             get_config,
@@ -534,6 +690,11 @@ pub fn run() {
             execute_action,
             execute_action_deferred,
             undo_last,
+            install_tap_helper,
+            uninstall_tap_helper,
+            check_tap_helper_status,
+            check_tap_hardware,
+            test_tap_helper,
         ])
         .setup(|app| {
             // Hide from dock — menu bar only
@@ -564,6 +725,17 @@ pub fn run() {
 
             // Register global shortcuts from Rust
             register_shortcuts(&app.handle().clone());
+
+            // Start tap listener if enabled
+            {
+                let state = app.state::<AppState>();
+                let config = state.config.lock().unwrap();
+                if config.tap_to_polish.as_ref().map_or(false, |t| t.enabled) {
+                    let running = state.tap_listener_running.clone();
+                    running.store(true, Ordering::Relaxed);
+                    tap_listener::start(app.handle().clone(), running);
+                }
+            }
 
             // Build tray menu
             let version = app.config().version.clone().unwrap_or_default();
