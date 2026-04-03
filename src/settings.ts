@@ -405,7 +405,7 @@ async function init() {
             btn.textContent = "Restart";
             btn.classList.remove("btn-action-success");
             btn.disabled = false;
-            btn.onclick = () => { invoke("reset_accessibility"); };
+            btn.onclick = () => { invoke("restart_app"); };
           } catch (e: any) {
             status.textContent = `Install failed: ${e}`;
             btn.textContent = "Retry";
