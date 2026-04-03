@@ -396,6 +396,28 @@ fn register_shortcuts(app: &AppHandle) {
     } else {
         app_log(&state_ref, &format!("Registered: {}", shortcut));
     }
+
+    // Custom action shortcuts
+    for action in &config.custom_actions {
+        if let Some(ref shortcut_str) = action.shortcut {
+            let app_handle = app.clone();
+            let shortcut = shortcut_str.clone();
+            let action_id = format!("custom_{}", action.id);
+            if let Err(e) = app.global_shortcut().on_shortcut(shortcut.as_str(), move |_app, _shortcut, event| {
+                if event.state != ShortcutState::Pressed { return; }
+                let app = app_handle.clone();
+                let id = action_id.clone();
+                tauri::async_runtime::spawn(async move {
+                    let state = app.state::<AppState>();
+                    let _ = execute_action_internal(&app, &state, id, false).await;
+                });
+            }) {
+                app_log(&state_ref, &format!("FAILED to register {}: {}", shortcut, e));
+            } else {
+                app_log(&state_ref, &format!("Registered custom action: {}", shortcut));
+            }
+        }
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
