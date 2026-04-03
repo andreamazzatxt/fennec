@@ -28,22 +28,36 @@ No windows to manage. No copy-pasting into a chat. Just better text, right where
 
 - **Instant correction** — Select text, press shortcut, corrected text replaces the selection
 - **Action menu** — Native macOS popup with actions: Smooth, Formal, Casual, Concise
+- **Custom actions** — Create your own actions with custom prompts and emoji icons
 - **Works everywhere** — Slack, WhatsApp Web, Mail, Notes, VS Code, browsers, any app
 - **Select all + correct** — Fix an entire text field with one shortcut
 - **Undo** — Restore the original text if you don't like the result
 - **Auto-detect language** — Works in any language, responds in the same language
 - **Accessibility API** — Uses AX APIs for direct text read/write, clipboard fallback for web apps
 - **Sound feedback** — A subtle sound when the AI finishes
-- **Auto-update** — Stays up to date automatically
+- **Auto-update** — Check for updates and install from within the app
 - **Launch at login** — Toggle from the tray menu
 - **Menu bar only** — No dock icon, runs purely from the menu bar
 - **Tiny footprint** — ~8MB app size, powered by Tauri v2
 
 ## Install
 
-### Download
+### One-liner (recommended)
 
-Grab the latest `.dmg` from [Releases](https://github.com/andreamazzatxt/fennec/releases), open it, and drag Fennec to Applications.
+```bash
+curl -fsSL https://raw.githubusercontent.com/andreamazzatxt/fennec/main/scripts/install.sh | bash
+```
+
+This downloads the latest release, installs it to `/Applications`, and opens the app.
+
+### Download manually
+
+Grab the latest `.dmg` from [Releases](https://github.com/andreamazzatxt/fennec/releases).
+
+> **Note:** Since Fennec is not notarized with Apple, macOS Gatekeeper may block the app when downloaded from a browser. If you see "Fennec is damaged and can't be opened", use the one-liner install above or run:
+> ```bash
+> xattr -d com.apple.quarantine /Applications/Fennec.app
+> ```
 
 ### Build from source
 
@@ -60,7 +74,7 @@ The `.dmg` will be in `src-tauri/target/release/bundle/dmg/`.
 
 - [Bun](https://bun.sh/) — JavaScript runtime
 - [Rust](https://rustup.rs/) — for the Tauri backend
-- Node.js 24+ (via [nvm](https://github.com/nvm-sh/nvm))
+- Node.js 22+ (via [nvm](https://github.com/nvm-sh/nvm))
 
 ## Setup
 
@@ -90,16 +104,35 @@ All shortcuts are customizable in **Settings > Shortcuts** — click any shortcu
 
 The action menu is a native macOS popup that appears at your cursor with:
 
-- **Smooth it out** — Fix grammar, spelling, and flow
-- **More formal** — Rewrite in a professional tone
-- **More casual** — Rewrite in a friendly tone
-- **Make it shorter** — Condense while keeping the meaning
+- ✨ **Smooth it out** — Fix grammar, spelling, and flow
+- 👔 **More formal** — Rewrite in a professional tone
+- 😎 **More casual** — Rewrite in a friendly tone
+- ✂️ **Make it shorter** — Condense while keeping the meaning
+- Plus any **custom actions** you've created
+
+### Custom actions
+
+Create your own actions in **Settings > Actions**:
+
+1. Click **+ Add action**
+2. Give it a name, prompt, and pick an emoji icon
+3. Save — your action appears in the action menu
+
+## Settings
+
+| Tab | Description |
+|-----|-------------|
+| **Shortcuts** | Customize all keyboard shortcuts |
+| **Connection** | Configure AI provider (AI Gateway or OpenAI) |
+| **Actions** | Create and manage custom actions |
+| **General** | Check for updates, reset accessibility permissions |
+| **Logs** | Real-time debug logs |
 
 ## Tray menu
 
 Right-click (or click) the Fennec icon in the menu bar:
 
-- **Fennec v0.3.0** — Version display
+- **Fennec vX.Y.Z** — Version display
 - **Settings...** — Open the settings window
 - **Launch at login** — Toggle autostart
 - **Quit Fennec** — Exit the app
@@ -108,9 +141,11 @@ Right-click (or click) the Fennec icon in the menu bar:
 
 ```bash
 bun install
-bun run tauri dev    # dev mode with hot reload
+bun run tauri dev    # dev mode with hot reload (red tray icon)
 bun run tauri build  # build .dmg
 ```
+
+In dev mode, the tray icon is red to distinguish it from the production app.
 
 ## Tech
 
