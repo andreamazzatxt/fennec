@@ -1,6 +1,6 @@
 [package]
 name = "fennec"
-version = "0.5.5"
+version = "0.5.6"
 description = "AI-powered text correction for macOS"
 authors = ["andreamazzatxt"]
 edition = "2021"

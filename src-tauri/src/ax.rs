@@ -38,10 +38,11 @@ unsafe fn get_focused_element() -> Result<AXUIElementRef, String> {
         &mut focused_app,
     );
 
+    let app_source;
     if app_err != kAXErrorSuccess as i32 || focused_app.is_null() {
         // Fallback: get frontmost app PID via NSWorkspace
         if let Some(pid) = get_frontmost_pid() {
-            println!("[fennec] AXFocusedApplication failed ({}), falling back to NSWorkspace PID {}", app_err, pid);
+            app_source = format!("NSWorkspace PID {}", pid);
             focused_app = AXUIElementCreateApplication(pid) as CFTypeRef;
         } else {
             return Err(format!(
@@ -50,7 +51,7 @@ unsafe fn get_focused_element() -> Result<AXUIElementRef, String> {
             ));
         }
     } else {
-        println!("[fennec] AXFocusedApplication OK");
+        app_source = "AXFocusedApplication".to_string();
     }
 
     // Get the focused UI element from the application
@@ -76,8 +77,8 @@ unsafe fn get_focused_element() -> Result<AXUIElementRef, String> {
             Ok(focused2 as AXUIElementRef)
         } else {
             Err(format!(
-                "No focused element (app AXError: {}, system AXError: {})",
-                err, err2
+                "No focused element (via {}, app AXError: {}, system AXError: {})",
+                app_source, err, err2
             ))
         }
     }
