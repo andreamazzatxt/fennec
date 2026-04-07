@@ -77,6 +77,9 @@ pub fn check_accessibility_with_prompt() -> bool {
 /// Tries AXFocusedApplication first; if that returns kAXErrorNoValue (common on
 /// recent macOS with Accessory-policy apps), falls back to NSWorkspace frontmostApplication PID.
 unsafe fn get_focused_element() -> Result<AXUIElementRef, String> {
+    extern "C" { fn pthread_main_np() -> i32; }
+    let is_main = pthread_main_np();
+
     let system = AXUIElementCreateSystemWide();
     let mut focused_app: CFTypeRef = ptr::null_mut();
 
@@ -103,6 +106,8 @@ unsafe fn get_focused_element() -> Result<AXUIElementRef, String> {
         app_source = "AXFocusedApplication".to_string();
     }
 
+    println!("[fennec] App source: {}, AXFocusedApp err: {}, main_thread: {}", app_source, app_err, is_main);
+
     // Get the focused UI element from the application
     let elem_attr = CFString::new("AXFocusedUIElement");
     let mut focused: CFTypeRef = ptr::null_mut();
@@ -111,6 +116,8 @@ unsafe fn get_focused_element() -> Result<AXUIElementRef, String> {
         elem_attr.as_concrete_TypeRef(),
         &mut focused,
     );
+
+    println!("[fennec] AXFocusedUIElement from app: err={}, null={}", err, focused.is_null());
 
     if err == kAXErrorSuccess as i32 && !focused.is_null() {
         Ok(focused as AXUIElementRef)
@@ -126,8 +133,8 @@ unsafe fn get_focused_element() -> Result<AXUIElementRef, String> {
             Ok(focused2 as AXUIElementRef)
         } else {
             Err(format!(
-                "No focused element (via {}, app AXError: {}, system AXError: {})",
-                app_source, err, err2
+                "No focused element (via {}, app AXError: {}, system AXError: {}, main_thread: {})",
+                app_source, err, err2, is_main
             ))
         }
     }
