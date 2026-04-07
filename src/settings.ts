@@ -518,6 +518,29 @@ async function init() {
     }
   });
 
+  // ── General: Accessibility status ──
+  async function checkAxStatus() {
+    const badge = $el("axStatusBadge");
+    const status = $el("axStatus");
+    try {
+      const granted = await invoke<boolean>("check_accessibility");
+      if (granted) {
+        badge.textContent = "Granted";
+        badge.className = "status-badge granted";
+        status.textContent = "Fennec can read and write text";
+      } else {
+        badge.textContent = "Denied";
+        badge.className = "status-badge denied";
+        status.textContent = "Grant in System Settings > Privacy > Accessibility";
+      }
+    } catch {
+      badge.textContent = "Unknown";
+      badge.className = "status-badge";
+      status.textContent = "Could not check permissions";
+    }
+  }
+  checkAxStatus();
+
   // ── General: Check for updates ──
   $el("checkUpdateBtn").addEventListener("click", async () => {
     const btn = $el("checkUpdateBtn") as HTMLButtonElement;

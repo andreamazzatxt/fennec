@@ -798,6 +798,22 @@
         border-color: var(--sage-border);
       }
 
+      .status-badge {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 3px 10px;
+        border-radius: 8px;
+        letter-spacing: 0.3px;
+      }
+      .status-badge.granted {
+        color: var(--sage);
+        background: rgba(130, 160, 120, 0.1);
+      }
+      .status-badge.denied {
+        color: #b44;
+        background: rgba(180, 68, 68, 0.1);
+      }
+
       /* ── Toggle switch ── */
       .toggle-switch {
         position: relative;
@@ -1018,6 +1034,13 @@
       <div class="panel" id="panel-general">
         <div class="version-info">v<span id="appVersion">0.0.0</span></div>
         <div class="action-list">
+          <div class="action-row" id="axStatusRow">
+            <div class="action-info">
+              <span class="action-title">Accessibility</span>
+              <span class="action-subtitle" id="axStatus">Checking...</span>
+            </div>
+            <span id="axStatusBadge" class="status-badge">...</span>
+          </div>
           <div class="action-row" id="updateRow">
             <div class="action-info">
               <span class="action-title">Check for updates</span>
