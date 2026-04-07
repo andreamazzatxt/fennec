@@ -342,11 +342,52 @@ fn check_tap_hardware() -> bool {
         .unwrap_or(false)
 }
 
+/// Read text via AX — call this from the shortcut callback thread (not from tokio).
+fn read_text_sync(state: &AppState, select_all: bool) -> Result<ax::ReadResult, String> {
+    app_log(state, &format!("AX read (select_all: {}, thread: {:?})", select_all, std::thread::current().id()));
+
+    let read_result = if select_all {
+        match ax::select_all_text() {
+            Ok(text) => {
+                app_log(state, &format!("select_all_text OK: {} chars", text.len()));
+                ax::ReadResult { text, was_selected: false }
+            }
+            Err(e) => {
+                app_log(state, &format!("select_all_text FAILED: {}", e));
+                return Err(e);
+            }
+        }
+    } else {
+        match ax::read_selection_only() {
+            Ok(Some(r)) => {
+                app_log(state, &format!("read_selection_only OK: {} chars", r.text.len()));
+                r
+            }
+            Ok(None) => {
+                app_log(state, "No text selected");
+                return Err("No text selected".into());
+            }
+            Err(e) => {
+                app_log(state, &format!("read_selection_only FAILED: {}", e));
+                return Err(e);
+            }
+        }
+    };
+
+    if read_result.text.trim().is_empty() {
+        app_log(state, "No text selected (empty)");
+        return Err("No text selected".into());
+    }
+
+    Ok(read_result)
+}
+
 async fn execute_action_internal(
     app: &AppHandle,
     state: &AppState,
     action_id: String,
     select_all: bool,
+    pre_read: Option<ax::ReadResult>,
 ) -> Result<(), String> {
     let config = state.config.lock().unwrap().clone();
 
@@ -360,41 +401,12 @@ async fn execute_action_internal(
 
     app_log(state, &format!("Action: {} (select_all: {})", action_id, select_all));
 
-    // AX calls must run on the main thread — from Tokio worker threads they fail
-    // with kAXErrorCannotComplete on recent macOS.
-    let (tx, rx) = std::sync::mpsc::sync_channel::<Result<Option<ax::ReadResult>, String>>(1);
-    let sa = select_all;
-    app.run_on_main_thread(move || {
-        let result = if sa {
-            match ax::select_all_text() {
-                Ok(text) => Ok(Some(ax::ReadResult { text, was_selected: false })),
-                Err(e) => Err(e),
-            }
-        } else {
-            ax::read_selection_only()
-        };
-        let _ = tx.send(result);
-    }).map_err(|e| format!("Main thread dispatch failed: {}", e))?;
-
-    let read_result = match rx.recv().map_err(|e| format!("Channel recv failed: {}", e))? {
-        Ok(Some(r)) => {
-            app_log(state, &format!("{} OK: {} chars", if select_all { "select_all_text" } else { "read_selection_only" }, r.text.len()));
-            r
-        }
-        Ok(None) => {
-            app_log(state, "No text selected");
-            return Err("No text selected".into());
-        }
-        Err(e) => {
-            app_log(state, &format!("{} FAILED: {}", if select_all { "select_all_text" } else { "read_selection_only" }, e));
-            return Err(e);
-        }
+    // Use pre-read text if available (read from shortcut callback thread),
+    // otherwise read here (for Tauri command calls)
+    let read_result = match pre_read {
+        Some(r) => r,
+        None => read_text_sync(state, select_all)?,
     };
-
-    if read_result.text.trim().is_empty() {
-        app_log(state, "No text selected (empty)");
-        return Err("No text selected".into());
-    }
 
     app_log(state, &format!("Read {} chars (selected={})", read_result.text.len(), read_result.was_selected));
 
@@ -414,14 +426,7 @@ async fn execute_action_internal(
         Ok(corrected) => {
             app_log(state, &format!("AI result: {} chars", corrected.len()));
             *state.last_original.lock().unwrap() = Some(read_result.text);
-            // Write must also run on main thread
-            let (wtx, wrx) = std::sync::mpsc::sync_channel::<Result<(), String>>(1);
-            let text_to_write = corrected.clone();
-            let was_selected = read_result.was_selected;
-            let _ = app.run_on_main_thread(move || {
-                let _ = wtx.send(ax::write_text(&text_to_write, was_selected));
-            });
-            match wrx.recv().map_err(|e| format!("Channel recv failed: {}", e))? {
+            match ax::write_text(&corrected, read_result.was_selected) {
                 Ok(()) => {
                     app_log(state, "Text written successfully");
                     clipboard::play_done_sound();
@@ -447,7 +452,7 @@ async fn execute_action(
     action_id: String,
     select_all: bool,
 ) -> Result<(), String> {
-    execute_action_internal(&app, &state, action_id, select_all).await
+    execute_action_internal(&app, &state, action_id, select_all, None).await
 }
 
 /// Called from the action menu popup. Closes the popup, waits for focus to return,
@@ -467,19 +472,16 @@ async fn execute_action_deferred(
     tokio::time::sleep(std::time::Duration::from_millis(300)).await;
 
     let state = app.state::<AppState>();
-    execute_action_internal(&app, &state, action_id, select_all).await
+    execute_action_internal(&app, &state, action_id, select_all, None).await
 }
 
 #[tauri::command]
-async fn undo_last(app: AppHandle, state: tauri::State<'_, AppState>) -> Result<(), String> {
+async fn undo_last(state: tauri::State<'_, AppState>) -> Result<(), String> {
     let original = state.last_original.lock().unwrap().take();
     match original {
         Some(text) => {
-            let (tx, rx) = std::sync::mpsc::sync_channel::<Result<(), String>>(1);
-            app.run_on_main_thread(move || {
-                let _ = tx.send(ax::write_text(&text, false));
-            }).map_err(|e| format!("{}", e))?;
-            rx.recv().map_err(|e| format!("{}", e))?
+            ax::write_text(&text, false)?;
+            Ok(())
         }
         None => Err("Nothing to undo".into()),
     }
@@ -620,7 +622,7 @@ fn show_action_menu(app: &AppHandle, select_all: bool) {
                     let app_h = app_clone.clone();
                     tauri::async_runtime::spawn(async move {
                         let state = app_h.state::<AppState>();
-                        let _ = execute_action_internal(&app_h, &state, action, select_all).await;
+                        let _ = execute_action_internal(&app_h, &state, action, select_all, None).await;
                     });
                 }
             }
@@ -648,9 +650,12 @@ fn register_shortcuts(app: &AppHandle) {
     if let Err(e) = app.global_shortcut().on_shortcut(shortcut.as_str(), move |_app, _shortcut, event| {
         if event.state != ShortcutState::Pressed { return; }
         let app = app_handle.clone();
+        let state = app.state::<AppState>();
+        // Read AX on the shortcut callback thread (before spawning to tokio)
+        let pre_read = read_text_sync(&state, false).ok();
         tauri::async_runtime::spawn(async move {
             let state = app.state::<AppState>();
-            let _ = execute_action_internal(&app, &state, "correct".into(), false).await;
+            let _ = execute_action_internal(&app, &state, "correct".into(), false, pre_read).await;
         });
     }) {
         app_log(&state_ref, &format!("FAILED to register {}: {}", shortcut, e));
@@ -664,9 +669,11 @@ fn register_shortcuts(app: &AppHandle) {
     if let Err(e) = app.global_shortcut().on_shortcut(shortcut.as_str(), move |_app, _shortcut, event| {
         if event.state != ShortcutState::Pressed { return; }
         let app = app_handle.clone();
+        let state = app.state::<AppState>();
+        let pre_read = read_text_sync(&state, true).ok();
         tauri::async_runtime::spawn(async move {
             let state = app.state::<AppState>();
-            let _ = execute_action_internal(&app, &state, "correct".into(), true).await;
+            let _ = execute_action_internal(&app, &state, "correct".into(), true, pre_read).await;
         });
     }) {
         app_log(&state_ref, &format!("FAILED to register {}: {}", shortcut, e));
@@ -683,9 +690,7 @@ fn register_shortcuts(app: &AppHandle) {
         let state = app.state::<AppState>();
         let original = state.last_original.lock().unwrap().take();
         if let Some(text) = original {
-            let _ = app.run_on_main_thread(move || {
-                let _ = ax::write_text(&text, false);
-            });
+            let _ = ax::write_text(&text, false);
         }
     }) {
         app_log(&state_ref, &format!("FAILED to register {}: {}", shortcut, e));
@@ -727,9 +732,11 @@ fn register_shortcuts(app: &AppHandle) {
                 if event.state != ShortcutState::Pressed { return; }
                 let app = app_handle.clone();
                 let id = action_id.clone();
+                let state = app.state::<AppState>();
+                let pre_read = read_text_sync(&state, false).ok();
                 tauri::async_runtime::spawn(async move {
                     let state = app.state::<AppState>();
-                    let _ = execute_action_internal(&app, &state, id, false).await;
+                    let _ = execute_action_internal(&app, &state, id, false, pre_read).await;
                 });
             }) {
                 app_log(&state_ref, &format!("FAILED to register {}: {}", shortcut, e));
