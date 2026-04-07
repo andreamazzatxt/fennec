@@ -3,6 +3,17 @@ use core_foundation::base::{CFTypeRef, TCFType};
 use core_foundation::string::{CFString, CFStringRef};
 use std::ptr;
 
+/// Get the PID of the frontmost application via NSWorkspace.
+/// This works even when AXFocusedApplication returns kAXErrorNoValue.
+fn get_frontmost_pid() -> Option<i32> {
+    use objc2_app_kit::NSWorkspace;
+
+    let workspace = NSWorkspace::sharedWorkspace();
+    let app = workspace.frontmostApplication()?;
+    let pid = app.processIdentifier();
+    if pid > 0 { Some(pid) } else { None }
+}
+
 /// Check if the app has accessibility permissions (silent, no prompt)
 pub fn check_accessibility() -> bool {
     macos_accessibility_client::accessibility::application_is_trusted()
@@ -13,12 +24,13 @@ pub fn check_accessibility_with_prompt() -> bool {
     macos_accessibility_client::accessibility::application_is_trusted_with_prompt()
 }
 
-/// Get the currently focused UI element
-unsafe fn get_focused_element() -> Result<AXUIElementRef, String> {
+/// Get the AXUIElementRef for the focused application.
+/// Tries AXFocusedApplication first; if that returns kAXErrorNoValue (common on
+/// recent macOS with Accessory-policy apps), falls back to NSWorkspace frontmostApplication PID.
+unsafe fn get_focused_app() -> Result<AXUIElementRef, String> {
     let system = AXUIElementCreateSystemWide();
     let mut focused_app: CFTypeRef = ptr::null_mut();
 
-    // First get the focused application
     let app_attr = CFString::new("AXFocusedApplication");
     let app_err = AXUIElementCopyAttributeValue(
         system,
@@ -26,18 +38,29 @@ unsafe fn get_focused_element() -> Result<AXUIElementRef, String> {
         &mut focused_app,
     );
 
-    if app_err != kAXErrorSuccess as i32 || focused_app.is_null() {
-        return Err(format!(
+    if app_err == kAXErrorSuccess as i32 && !focused_app.is_null() {
+        return Ok(focused_app as AXUIElementRef);
+    }
+
+    // Fallback: get frontmost app PID via NSWorkspace
+    let pid = get_frontmost_pid()
+        .ok_or_else(|| format!(
             "No focused application (AXError: {}). Check Accessibility permissions in System Settings > Privacy & Security > Accessibility.",
             app_err
-        ));
-    }
+        ))?;
+
+    Ok(AXUIElementCreateApplication(pid))
+}
+
+/// Get the currently focused UI element
+unsafe fn get_focused_element() -> Result<AXUIElementRef, String> {
+    let app_element = get_focused_app()?;
 
     // Then get the focused UI element from that application
     let elem_attr = CFString::new("AXFocusedUIElement");
     let mut focused: CFTypeRef = ptr::null_mut();
     let err = AXUIElementCopyAttributeValue(
-        focused_app as AXUIElementRef,
+        app_element,
         elem_attr.as_concrete_TypeRef(),
         &mut focused,
     );
@@ -46,6 +69,7 @@ unsafe fn get_focused_element() -> Result<AXUIElementRef, String> {
         Ok(focused as AXUIElementRef)
     } else {
         // Also try system-wide as fallback
+        let system = AXUIElementCreateSystemWide();
         let mut focused2: CFTypeRef = ptr::null_mut();
         let err2 = AXUIElementCopyAttributeValue(
             system,
