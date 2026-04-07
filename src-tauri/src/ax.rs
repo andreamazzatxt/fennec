@@ -5,9 +5,10 @@ use std::ptr;
 
 // GCD FFI for dispatching to the real Cocoa main thread
 extern "C" {
-    fn dispatch_get_main_queue() -> *mut std::ffi::c_void;
+    // dispatch_get_main_queue() is a macro that expands to &_dispatch_main_q
+    static _dispatch_main_q: std::ffi::c_void;
     fn dispatch_sync_f(
-        queue: *mut std::ffi::c_void,
+        queue: *const std::ffi::c_void,
         context: *mut std::ffi::c_void,
         work: unsafe extern "C" fn(*mut std::ffi::c_void),
     );
@@ -42,7 +43,7 @@ where
 
     unsafe {
         dispatch_sync_f(
-            dispatch_get_main_queue(),
+            &_dispatch_main_q as *const std::ffi::c_void,
             &mut ctx as *mut Context<F, R> as *mut std::ffi::c_void,
             trampoline::<F, R>,
         );
