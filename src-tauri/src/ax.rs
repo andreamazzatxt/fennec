@@ -263,8 +263,9 @@ fn write_text_inner(new_text: &str, was_selected: bool) -> Result<(), String> {
                     if !verify.is_null() {
                         if let Some(current) = cftype_to_string(verify) {
                             if current.contains(new_text.trim()) {
-                                // Move cursor to end
+                                // Move cursor to end and deselect
                                 move_cursor_to_end(element, new_text.len());
+                                deselect_with_arrow();
                                 println!("[fennec] Wrote via AX (AXValue)");
                                 return Ok(());
                             }
@@ -506,6 +507,14 @@ end tell"#)
 
     println!("[fennec] Read all text via clipboard fallback ({} chars)", text.len());
     Ok(text)
+}
+
+/// Send Right arrow key to collapse selection to cursor position
+fn deselect_with_arrow() {
+    let _ = std::process::Command::new("osascript")
+        .arg("-e")
+        .arg(r#"tell application "System Events" to key code 124"#) // Right arrow
+        .output();
 }
 
 /// Move cursor to end of text in element
