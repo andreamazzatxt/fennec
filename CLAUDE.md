@@ -1,3 +1,7 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 # Fennec
 
 macOS menu bar app for AI-powered text correction. Runs as a tray icon with global shortcuts.
@@ -28,8 +32,10 @@ macOS menu bar app for AI-powered text correction. Runs as a tray icon with glob
 bun install              # install JS deps
 bun run tauri dev        # dev mode with hot reload
 bun run tauri build      # production build (.dmg)
+cargo check --workspace  # fast type-check across all crates
 cargo build -p fennec-tap --release  # build slap helper separately
 cargo test -p fennec-tap # run tap detector tests
+cargo test -p fennec-tap -- test_name  # run a single test by name
 ```
 
 ## Build & Release
