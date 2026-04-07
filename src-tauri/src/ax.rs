@@ -73,10 +73,35 @@ pub fn check_accessibility_with_prompt() -> bool {
     macos_accessibility_client::accessibility::application_is_trusted_with_prompt()
 }
 
+const AX_RETRY_ATTEMPTS: u32 = 3;
+const AX_RETRY_DELAY_MS: u64 = 100;
+
 /// Get the currently focused UI element.
 /// Tries AXFocusedApplication first; if that returns kAXErrorNoValue (common on
 /// recent macOS with Accessory-policy apps), falls back to NSWorkspace frontmostApplication PID.
+/// Retries on kAXErrorCannotComplete (-25212) which is often transient.
 unsafe fn get_focused_element() -> Result<AXUIElementRef, String> {
+    let mut last_err = String::new();
+    for attempt in 0..AX_RETRY_ATTEMPTS {
+        if attempt > 0 {
+            std::thread::sleep(std::time::Duration::from_millis(AX_RETRY_DELAY_MS));
+            println!("[fennec] AX retry attempt {}/{}", attempt + 1, AX_RETRY_ATTEMPTS);
+        }
+        match get_focused_element_once() {
+            Ok(elem) => return Ok(elem),
+            Err(e) => {
+                last_err = e;
+                // Only retry on kAXErrorCannotComplete
+                if !last_err.contains("-25212") {
+                    return Err(last_err);
+                }
+            }
+        }
+    }
+    Err(last_err)
+}
+
+unsafe fn get_focused_element_once() -> Result<AXUIElementRef, String> {
     extern "C" { fn pthread_main_np() -> i32; }
     let is_main = pthread_main_np();
 
@@ -396,15 +421,23 @@ fn clipboard_fallback_write(text: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Read all text from the focused element (for select-all operations)
+/// Read all text from the focused element (for select-all operations).
+/// Falls back to clipboard (Cmd+A, Cmd+C) if AX fails.
 pub fn select_all_text() -> Result<String, String> {
-    on_main_thread(select_all_text_inner)
+    match on_main_thread(select_all_text_inner) {
+        Ok(text) => Ok(text),
+        Err(e) => {
+            println!("[fennec] AX select_all_text failed: {}, trying clipboard fallback", e);
+            clipboard_fallback_read()
+        }
+    }
 }
 
 fn select_all_text_inner() -> Result<String, String> {
     unsafe {
         let element = get_focused_element()?;
 
+        // Try AXValue first (works for native text fields)
         let value_attr = CFString::new("AXValue");
         let mut value: CFTypeRef = ptr::null_mut();
 
@@ -416,13 +449,63 @@ fn select_all_text_inner() -> Result<String, String> {
 
         if err == kAXErrorSuccess as i32 && !value.is_null() {
             if let Some(text) = cftype_to_string(value) {
-                println!("[fennec] AX: Read all text ({} chars)", text.len());
-                return Ok(text);
+                if !text.is_empty() {
+                    println!("[fennec] AX: Read all text via AXValue ({} chars)", text.len());
+                    return Ok(text);
+                }
             }
         }
 
-        Err("Could not read full text from element".into())
+        println!("[fennec] AX: AXValue failed (err={}), trying clipboard fallback", err);
     }
+
+    // Clipboard fallback: Cmd+A, Cmd+C, read pasteboard
+    // Works for web apps and elements that don't expose AXValue
+    clipboard_fallback_read()
+}
+
+/// Read text via clipboard: select all, copy, read pasteboard, then restore.
+fn clipboard_fallback_read() -> Result<String, String> {
+    // Save current clipboard
+    let old_clipboard = std::process::Command::new("pbpaste")
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok());
+
+    // Select all (Cmd+A) then copy (Cmd+C)
+    std::process::Command::new("osascript")
+        .arg("-e")
+        .arg(r#"tell application "System Events"
+    keystroke "a" using command down
+    delay 0.1
+    keystroke "c" using command down
+end tell"#)
+        .output()
+        .map_err(|e| format!("Select+copy failed: {}", e))?;
+
+    std::thread::sleep(std::time::Duration::from_millis(150));
+
+    // Read clipboard
+    let output = std::process::Command::new("pbpaste")
+        .output()
+        .map_err(|e| format!("pbpaste failed: {}", e))?;
+    let text = String::from_utf8_lossy(&output.stdout).to_string();
+
+    // Restore original clipboard
+    if let Some(old) = old_clipboard {
+        let escaped = old.replace('\\', "\\\\").replace('"', "\\\"");
+        let _ = std::process::Command::new("osascript")
+            .arg("-e")
+            .arg(format!(r#"set the clipboard to "{}""#, escaped))
+            .output();
+    }
+
+    if text.trim().is_empty() {
+        return Err("Clipboard fallback: no text read".into());
+    }
+
+    println!("[fennec] Read all text via clipboard fallback ({} chars)", text.len());
+    Ok(text)
 }
 
 /// Move cursor to end of text in element

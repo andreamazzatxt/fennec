@@ -1172,7 +1172,7 @@ dependencies = [
 
 [[package]]
 name = "fennec"
-version = "0.5.9"
+version = "0.5.10"
 dependencies = [
  "accessibility-sys",
  "chrono",
@@ -1198,7 +1198,7 @@ dependencies = [
 
 [[package]]
 name = "fennec-tap"
-version = "0.5.9"
+version = "0.5.10"
 dependencies = [
  "cc",
 ]
