@@ -3,6 +3,54 @@ use core_foundation::base::{CFTypeRef, TCFType};
 use core_foundation::string::{CFString, CFStringRef};
 use std::ptr;
 
+// GCD FFI for dispatching to the real Cocoa main thread
+extern "C" {
+    fn dispatch_get_main_queue() -> *mut std::ffi::c_void;
+    fn dispatch_sync_f(
+        queue: *mut std::ffi::c_void,
+        context: *mut std::ffi::c_void,
+        work: unsafe extern "C" fn(*mut std::ffi::c_void),
+    );
+}
+
+/// Run a closure on the real Cocoa main thread via GCD dispatch_sync.
+/// Blocks the caller until completion.
+fn on_main_thread<F, R>(f: F) -> R
+where
+    F: FnOnce() -> R + Send,
+    R: Send,
+{
+    // Package the closure and result slot into a context
+    struct Context<F, R> {
+        f: Option<F>,
+        result: Option<R>,
+    }
+
+    unsafe extern "C" fn trampoline<F, R>(ctx: *mut std::ffi::c_void)
+    where
+        F: FnOnce() -> R,
+    {
+        let ctx = &mut *(ctx as *mut Context<F, R>);
+        let f = ctx.f.take().unwrap();
+        ctx.result = Some(f());
+    }
+
+    let mut ctx = Context {
+        f: Some(f),
+        result: None,
+    };
+
+    unsafe {
+        dispatch_sync_f(
+            dispatch_get_main_queue(),
+            &mut ctx as *mut Context<F, R> as *mut std::ffi::c_void,
+            trampoline::<F, R>,
+        );
+    }
+
+    ctx.result.unwrap()
+}
+
 /// Get the PID of the frontmost application via NSWorkspace.
 /// This works even when AXFocusedApplication returns kAXErrorNoValue.
 fn get_frontmost_pid() -> Option<i32> {
@@ -92,6 +140,10 @@ pub struct ReadResult {
 
 /// Read only the selected text. Returns None if nothing is selected.
 pub fn read_selection_only() -> Result<Option<ReadResult>, String> {
+    on_main_thread(read_selection_only_inner)
+}
+
+fn read_selection_only_inner() -> Result<Option<ReadResult>, String> {
     unsafe {
         let element = get_focused_element()?;
 
@@ -120,6 +172,11 @@ pub fn read_selection_only() -> Result<Option<ReadResult>, String> {
 
 /// Replace text. Tries AX write first, verifies it worked, falls back to clipboard.
 pub fn write_text(new_text: &str, was_selected: bool) -> Result<(), String> {
+    let text = new_text.to_string();
+    on_main_thread(move || write_text_inner(&text, was_selected))
+}
+
+fn write_text_inner(new_text: &str, was_selected: bool) -> Result<(), String> {
     unsafe {
         if let Ok(element) = get_focused_element() {
             let cf_text = CFString::new(new_text);
@@ -333,6 +390,10 @@ fn clipboard_fallback_write(text: &str) -> Result<(), String> {
 
 /// Read all text from the focused element (for select-all operations)
 pub fn select_all_text() -> Result<String, String> {
+    on_main_thread(select_all_text_inner)
+}
+
+fn select_all_text_inner() -> Result<String, String> {
     unsafe {
         let element = get_focused_element()?;
 

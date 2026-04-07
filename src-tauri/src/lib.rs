@@ -650,12 +650,9 @@ fn register_shortcuts(app: &AppHandle) {
     if let Err(e) = app.global_shortcut().on_shortcut(shortcut.as_str(), move |_app, _shortcut, event| {
         if event.state != ShortcutState::Pressed { return; }
         let app = app_handle.clone();
-        let state = app.state::<AppState>();
-        // Read AX on the shortcut callback thread (before spawning to tokio)
-        let pre_read = read_text_sync(&state, false).ok();
         tauri::async_runtime::spawn(async move {
             let state = app.state::<AppState>();
-            let _ = execute_action_internal(&app, &state, "correct".into(), false, pre_read).await;
+            let _ = execute_action_internal(&app, &state, "correct".into(), false, None).await;
         });
     }) {
         app_log(&state_ref, &format!("FAILED to register {}: {}", shortcut, e));
@@ -669,11 +666,9 @@ fn register_shortcuts(app: &AppHandle) {
     if let Err(e) = app.global_shortcut().on_shortcut(shortcut.as_str(), move |_app, _shortcut, event| {
         if event.state != ShortcutState::Pressed { return; }
         let app = app_handle.clone();
-        let state = app.state::<AppState>();
-        let pre_read = read_text_sync(&state, true).ok();
         tauri::async_runtime::spawn(async move {
             let state = app.state::<AppState>();
-            let _ = execute_action_internal(&app, &state, "correct".into(), true, pre_read).await;
+            let _ = execute_action_internal(&app, &state, "correct".into(), true, None).await;
         });
     }) {
         app_log(&state_ref, &format!("FAILED to register {}: {}", shortcut, e));
@@ -732,11 +727,9 @@ fn register_shortcuts(app: &AppHandle) {
                 if event.state != ShortcutState::Pressed { return; }
                 let app = app_handle.clone();
                 let id = action_id.clone();
-                let state = app.state::<AppState>();
-                let pre_read = read_text_sync(&state, false).ok();
                 tauri::async_runtime::spawn(async move {
                     let state = app.state::<AppState>();
-                    let _ = execute_action_internal(&app, &state, id, false, pre_read).await;
+                    let _ = execute_action_internal(&app, &state, id, false, None).await;
                 });
             }) {
                 app_log(&state_ref, &format!("FAILED to register {}: {}", shortcut, e));
